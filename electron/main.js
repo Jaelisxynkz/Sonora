@@ -172,7 +172,35 @@ async function discordInit(clientId) {
 async function discordSetActivity(activity) {
   if (!discordClient || !discordReady) return false;
   try {
-    await discordClient.setActivity(activity);
+    // Build a clean wire-format payload and force type 2 (Listening) so Discord
+    // always shows "Listening to Sonora" with the live progress bar — exactly
+    // like Spotify. The camelCase aliases (startTimestamp, largeImageKey, …)
+    // are included for discord-rpc v3 compatibility; v4 reads the snake_case
+    // nested objects. Extra fields like _meta are already stripped by the
+    // manager, but we reconstruct here so nothing unexpected leaks through.
+    const wire = {
+      type: 2,
+      name: activity.name || "Sonora",
+      details: activity.details,
+      state: activity.state,
+      timestamps: activity.timestamps || undefined,
+      assets: activity.assets || undefined,
+      buttons: Array.isArray(activity.buttons) ? activity.buttons : undefined,
+      instance: activity.instance !== false,
+    };
+    if (activity.timestamps) {
+      wire.startTimestamp = activity.timestamps.start;
+      if (activity.timestamps.end) wire.endTimestamp = activity.timestamps.end;
+    }
+    if (activity.assets) {
+      wire.largeImageKey = activity.assets.large_image;
+      wire.largeImageText = activity.assets.large_text;
+      wire.smallImageKey = activity.assets.small_image;
+      wire.smallImageText = activity.assets.small_text;
+    }
+    // Remove undefined keys so Discord doesn't receive nulls.
+    Object.keys(wire).forEach((k) => wire[k] === undefined && delete wire[k]);
+    await discordClient.setActivity(wire);
     return true;
   } catch {
     return false;
