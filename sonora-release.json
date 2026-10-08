@@ -1,50 +1,51 @@
 {
-  "version": "1.0.1",
+  "version": "1.1.0",
   "codename": "Aurora",
   "releaseDate": "2026-10-08",
   "minVersion": "1.0.0",
   "mandatory": false,
-  "channel": "stable",
+  "channel": "pre-release",
   "releaseNotes": [
-    "Fixed registration page getting stuck on the loading screen",
-    "Real Discord Rich Presence via native desktop integration",
-    "Auto-update prompt: restart to install fixes and improvements",
-    "Download Center reads GitHub releases directly for instant availability",
-    "Smoother Discord preview with live status badge"
+    "Multi-artist Smart Playlist — search and blend any number of artists into one taste-ranked playlist",
+    "Artist Mixes for every artist — Spotify-style mixes generated on demand for any artist, not just your favorites",
+    "Mixes filter in Search — type an artist name and get their mix plus similar-artist mixes instantly",
+    "Pages auto-load with zero flash — cross-mount caching means no more skeleton stutter when navigating back",
+    "Search results appear instantly on cache hits — no debounce delay when returning to a previous query",
+    "Discord Rich Presence shows 'Listening to Sonora' with a live progress bar, album art, and dual buttons"
   ],
   "platforms": {
     "web": {
       "available": true,
-      "version": "1.0.1",
-      "url": "https://sonora-delectable-sonic-flow.base44.app",
+      "version": "1.1.0",
+      "url": "https://sonora-hub.base44.app",
       "type": "pwa"
     },
     "electron": {
       "available": true,
-      "version": "1.0.1",
+      "version": "1.1.0",
       "architecture": "x64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "nsis",
       "size": 95000000,
       "sha256": null,
-      "channel": "stable"
+      "channel": "pre-release"
     },
     "android": {
       "available": true,
-      "version": "1.0.1",
+      "version": "1.1.0",
       "architecture": "arm64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "apk",
       "size": 12000000,
       "sha256": null,
-      "channel": "stable"
+      "channel": "pre-release"
     },
     "ios": {
       "available": false,
-      "version": "1.0.1",
+      "version": "1.1.0",
       "appStoreUrl": null,
       "type": "appstore",
-      "channel": "stable"
+      "channel": "pre-release"
     }
   }
 }

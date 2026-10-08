@@ -22,7 +22,7 @@ const fs = require("fs");
 const { autoUpdater } = require("electron-updater");
 
 // The live Sonora app — same accounts, backend and library as the web.
-const APP_URL = "https://sonora-delectable-sonic-flow.base44.app";
+const APP_URL = "https://sonora-hub.base44.app";
 
 let mainWindow = null;
 
@@ -186,7 +186,9 @@ async function discordSetActivity(activity) {
       timestamps: activity.timestamps || undefined,
       assets: activity.assets || undefined,
       buttons: Array.isArray(activity.buttons) ? activity.buttons : undefined,
-      instance: activity.instance !== false,
+      // instance:false forces "Listening to" (type 2) — true shows "Playing"
+      // and suppresses the progress bar. Spotify uses false.
+      instance: false,
     };
     if (activity.timestamps) {
       wire.startTimestamp = activity.timestamps.start;
@@ -223,6 +225,9 @@ function setupAutoUpdater() {
   if (!app.isPackaged) return;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  // Allow pre-release versions to be picked up by the auto-updater so the
+  // latest pre-release channel installs on existing desktop builds.
+  autoUpdater.allowPrerelease = true;
 
   autoUpdater.on("update-available", (info) => {
     if (mainWindow) mainWindow.webContents.send("sonora:update-available", info);

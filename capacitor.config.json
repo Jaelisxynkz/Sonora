@@ -3,7 +3,7 @@
   "appName": "Sonora",
   "webDir": "dist",
   "server": {
-    "url": "https://sonora-delectable-sonic-flow.base44.app",
+    "url": "https://sonora-hub.base44.app",
     "cleartext": false,
     "androidScheme": "https",
     "iosScheme": "https"
