@@ -137,6 +137,59 @@ ipcMain.handle("sonora:get-downloads-dir", () => {
   return dir;
 });
 
+// Discord Rich Presence — the renderer drives these via the preload bridge.
+ipcMain.handle("sonora:discord:init", (_e, clientId) => discordInit(clientId));
+ipcMain.handle("sonora:discord:set-activity", (_e, activity) => discordSetActivity(activity));
+ipcMain.handle("sonora:discord:clear-activity", () => discordClearActivity());
+ipcMain.handle("sonora:discord:disconnect", () => discordDisconnect());
+
+// ---- Discord Rich Presence ------------------------------------------------
+// Real Discord RPC via the discord-rpc package (main process only). The
+// renderer sends the user's Discord Client ID + activity payloads through
+// the preload bridge; this opens the local IPC pipe to the running Discord
+// desktop client and sets/clears the "Listening to Sonora" activity.
+let discordClient = null;
+let discordReady = false;
+
+async function discordInit(clientId) {
+  if (!clientId || typeof clientId !== "string") return false;
+  if (discordClient && discordReady) return true;
+  try { await discordDisconnect(); } catch {}
+  try {
+    const DiscordRPC = require("discord-rpc");
+    DiscordRPC.register(clientId);
+    discordClient = new DiscordRPC.Client({ transport: "ipc" });
+    await discordClient.login({ clientId });
+    discordReady = true;
+    return true;
+  } catch (e) {
+    discordClient = null;
+    discordReady = false;
+    return false;
+  }
+}
+
+async function discordSetActivity(activity) {
+  if (!discordClient || !discordReady) return false;
+  try {
+    await discordClient.setActivity(activity);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function discordClearActivity() {
+  if (!discordClient || !discordReady) return false;
+  try { await discordClient.clearActivity(); return true; } catch { return false; }
+}
+
+async function discordDisconnect() {
+  if (discordClient) { try { await discordClient.destroy(); } catch {} }
+  discordClient = null;
+  discordReady = false;
+}
+
 // ---- Auto-update ----------------------------------------------------------
 function setupAutoUpdater() {
   if (!app.isPackaged) return;
@@ -190,5 +243,6 @@ app.on("open-url", (e, url) => {
 });
 
 app.on("window-all-closed", () => {
+  discordDisconnect();
   if (process.platform !== "darwin") app.quit();
 });
