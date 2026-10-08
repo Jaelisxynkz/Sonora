@@ -1,39 +1,39 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "codename": "Aurora",
   "releaseDate": "2026-10-08",
   "minVersion": "1.0.0",
   "mandatory": false,
   "channel": "stable",
   "releaseNotes": [
-    "Initial production release of the Sonora application ecosystem",
-    "Shared application core across Web, Windows, Android, and iOS",
-    "Centralized update architecture via the Sonora Cloudflare Worker",
-    "SonoraMigrationManager for safe, versioned local data migrations",
-    "Premium music streaming with personalized discovery and offline downloads"
+    "Fixed registration page getting stuck on the loading screen",
+    "Real Discord Rich Presence via native desktop integration",
+    "Auto-update prompt: restart to install fixes and improvements",
+    "Download Center reads GitHub releases directly for instant availability",
+    "Smoother Discord preview with live status badge"
   ],
   "platforms": {
     "web": {
       "available": true,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "url": "https://sonora-delectable-sonic-flow.base44.app",
       "type": "pwa"
     },
     "electron": {
-      "available": false,
-      "version": "1.0.0",
+      "available": true,
+      "version": "1.0.1",
       "architecture": "x64",
-      "url": "https://sonora-proxy.mohamedkadry8722.workers.dev/releases/sonora-setup-1.0.0.exe",
+      "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "nsis",
       "size": 95000000,
       "sha256": null,
       "channel": "stable"
     },
     "android": {
-      "available": false,
-      "version": "1.0.0",
+      "available": true,
+      "version": "1.0.1",
       "architecture": "arm64",
-      "url": "https://sonora-proxy.mohamedkadry8722.workers.dev/releases/sonora-1.0.0.apk",
+      "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "apk",
       "size": 12000000,
       "sha256": null,
@@ -41,7 +41,7 @@
     },
     "ios": {
       "available": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "appStoreUrl": null,
       "type": "appstore",
       "channel": "stable"
