@@ -6,8 +6,8 @@
 //
 // Bump this on every production publish. Semantic versioning: MAJOR.MINOR.PATCH.
 
-export const APP_VERSION = "1.1.1";
-export const APP_BUILD = 2;
+export const APP_VERSION = "1.1.3";
+export const APP_BUILD = 4;
 export const APP_NAME = "Sonora";
 export const APP_CODENAME = "Aurora";
 
