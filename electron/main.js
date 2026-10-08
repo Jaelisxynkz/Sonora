@@ -143,11 +143,22 @@ ipcMain.handle("sonora:get-downloads-dir", () => {
   return dir;
 });
 
+// Sync version read for the preload bridge. process.env.npm_package_version is
+// undefined in a packaged app, so the bridge reads app.getVersion() (the real
+// version from package.json) via sync IPC at preload time — otherwise the
+// desktop build always reported "1.0.0" instead of its real version.
+ipcMain.on("sonora:get-version", (e) => { e.returnValue = app.getVersion(); });
+
 // Discord Rich Presence — the renderer drives these via the preload bridge.
 ipcMain.handle("sonora:discord:init", (_e, clientId) => discordInit(clientId));
 ipcMain.handle("sonora:discord:set-activity", (_e, activity) => discordSetActivity(activity));
 ipcMain.handle("sonora:discord:clear-activity", () => discordClearActivity());
 ipcMain.handle("sonora:discord:disconnect", () => discordDisconnect());
+ipcMain.handle("sonora:discord:status", () => !!(discordClient && discordReady));
+ipcMain.handle("sonora:discord:reset", async (_e, clientId) => {
+  await discordDisconnect();
+  return discordInit(clientId || discordClientId);
+});
 
 // ---- Discord Rich Presence ------------------------------------------------
 // Real Discord RPC via the discord-rpc package (main process only). The
@@ -156,16 +167,32 @@ ipcMain.handle("sonora:discord:disconnect", () => discordDisconnect());
 // desktop client and sets/clears the "Listening to Sonora" activity.
 let discordClient = null;
 let discordReady = false;
+let discordClientId = null;
 
 async function discordInit(clientId) {
   if (!clientId || typeof clientId !== "string") return false;
+  discordClientId = clientId; // store for auto-reconnect
   if (discordClient && discordReady) return true;
   try { await discordDisconnect(); } catch {}
   try {
     const DiscordRPC = require("discord-rpc");
-    DiscordRPC.register(clientId);
+    // register() writes a Windows registry key for the discord-<id>:// scheme.
+    // It's only needed for join/spectate buttons and can fail silently — it
+    // must NEVER block the actual RPC login (the #1 cause of "Discord is open
+    // but Sonora says not connected").
+    try { DiscordRPC.register(clientId); } catch {}
     discordClient = new DiscordRPC.Client({ transport: "ipc" });
-    await discordClient.login({ clientId });
+    // Detect when Discord closes/crashes so we know the pipe is dead and
+    // the next setActivity must re-init instead of failing silently.
+    discordClient.on("disconnected", () => {
+      discordReady = false;
+      discordClient = null;
+    });
+    // Never hang forever on a dead pipe — fail after 10s so the renderer retries.
+    await Promise.race([
+      discordClient.login({ clientId }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("Discord login timeout")), 10000)),
+    ]);
     discordReady = true;
     return true;
   } catch (e) {
@@ -176,6 +203,13 @@ async function discordInit(clientId) {
 }
 
 async function discordSetActivity(activity) {
+  // Auto-reconnect: if the connection died (Discord was closed/restarted),
+  // re-init with the stored clientId before giving up. This is the key fix
+  // for "sometimes it doesn't show" — without it, a Discord restart leaves
+  // the client stale and every setActivity fails silently forever.
+  if ((!discordClient || !discordReady) && discordClientId) {
+    await discordInit(discordClientId);
+  }
   if (!discordClient || !discordReady) return false;
   try {
     // ROOT CAUSE OF "Playing" vs "Listening to":
@@ -224,6 +258,10 @@ async function discordSetActivity(activity) {
     await discordClient.request("SET_ACTIVITY", { pid: process.pid, activity: act });
     return true;
   } catch {
+    // The IPC request failed — the connection is dead. Mark it so the next
+    // call triggers a re-init instead of retrying on a stale client.
+    discordReady = false;
+    discordClient = null;
     return false;
   }
 }
@@ -265,8 +303,24 @@ function setupAutoUpdater() {
     if (mainWindow) mainWindow.webContents.send("sonora:update-error", err?.message || "Update error");
   });
 
-  autoUpdater.checkForUpdates();
-  setInterval(() => autoUpdater.checkForUpdates(), 60 * 60 * 1000);
+  // Guard against concurrent checks: focus/show/interval can fire while a
+  // check is still in flight. electron-updater rejects overlapping calls, so
+  // this prevents log spam and wasted work on rapid focus changes.
+  let checking = false;
+  const safeCheck = () => {
+    if (checking) return;
+    checking = true;
+    autoUpdater.checkForUpdates().catch(() => {}).finally(() => { checking = false; });
+  };
+
+  safeCheck();
+  // Re-check periodically (hourly) and every time the window regains focus,
+  // so an update is detected promptly no matter how long the app has been open.
+  setInterval(safeCheck, 60 * 60 * 1000);
+  if (mainWindow) {
+    mainWindow.on("focus", safeCheck);
+    mainWindow.on("show", safeCheck);
+  }
 }
 
 // ---- App lifecycle --------------------------------------------------------

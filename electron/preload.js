@@ -11,7 +11,10 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("sonoraDesktop", {
   platform: "electron",
   updater: true,
-  version: process.env.npm_package_version || "1.0.0",
+  // Read the real app version from the main process (app.getVersion()). The
+  // npm_package_version env var is undefined in packaged builds, so a static
+  // fallback would always report "1.0.0".
+  version: ipcRenderer.sendSync("sonora:get-version") || "1.0.0",
 
   // Hand off to electron-updater: quit, install the downloaded update, restart.
   quitAndInstall: () => ipcRenderer.send("sonora:quit-and-install"),
@@ -39,5 +42,7 @@ contextBridge.exposeInMainWorld("sonoraDesktop", {
     setActivity: (activity) => ipcRenderer.invoke("sonora:discord:set-activity", activity),
     clearActivity: () => ipcRenderer.invoke("sonora:discord:clear-activity"),
     disconnect: () => ipcRenderer.invoke("sonora:discord:disconnect"),
+    status: () => ipcRenderer.invoke("sonora:discord:status"),
+    reset: (clientId) => ipcRenderer.invoke("sonora:discord:reset", clientId),
   },
 });

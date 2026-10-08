@@ -1,39 +1,30 @@
 {
-  "version": "1.1.7",
-  "build": 8,
+  "version": "1.1.8",
+  "build": 9,
   "codename": "Aurora",
   "releaseDate": "2026-10-09",
   "minVersion": "1.0.0",
   "mandatory": false,
   "channel": "stable",
   "releaseNotes": [
-    "On-launch auto-update check — every app start verifies you're on the latest version and guides you to install it, so you're never running stale",
-    "New-account sign-up no longer hangs on a loading screen — registration completes instantly every time",
-    "Android infinite-load fixed — the service worker is torn down on native, eliminating stale-shell hangs inside the WebView",
-    "Smoother Android cold start — the native splash hides the moment the app is ready instead of waiting on a fixed timer",
-    "Android hardware back button now closes the lyrics overlay, then the expanded player, navigates back, and exits from Home",
-    "Google sign-in now works on the Android app — the WebView user-agent is corrected so OAuth no longer rejects it as an embedded browser",
-    "The Android app installs with the real Sonora icon, not the default Capacitor one",
-    "Faster cover-art loading across the app — preconnect to the image CDN, priority loading for above-the-fold artwork, and no skeleton flash on cached images",
-    "Cloudflare Worker share routes are live — Discord, X, and WhatsApp rich embeds render with real artwork and track metadata",
-    "Share artwork proxy guarantees image delivery on every platform, bypassing CDN blocking",
-    "Discord Rich Presence shows 'Listening to Sonora' with a live progress bar — indistinguishable from Spotify's integration",
-    "Multi-artist Smart Playlist — search and blend any number of artists into one taste-ranked playlist",
-    "Artist Mixes for every artist — Spotify-style mixes generated on demand",
-    "Shared links open the exact song or playlist, even after signing in",
-    "Pages auto-load with zero flash — cross-mount caching eliminates skeleton stutter",
-    "Release channel stabilized to 'stable' for reliable auto-update detection across all installed versions"
+    "Desktop app now reports its real version — the About screen and update checks were stuck on '1.0.0' before, so the updater could never tell when a new build was actually installed",
+    "Auto-update checks no longer fire concurrently when you switch or refocus the window — quieter logs, no wasted work, updates land more reliably",
+    "Release pipeline is live again — the GitHub Actions workflow is restored, so pushing a version tag builds the Windows installer and Android APK and publishes them with auto-update metadata in one step",
+    "Boot splash can no longer hang — public-settings and auth checks are bounded by timeouts, so the app always reaches the music within seconds even on a slow connection",
+    "Every page load is bounded by a 15s safety timeout — a stuck backend never leaves a spinner spinning forever; it resolves to a retryable error state instead",
+    "Music data keeps flowing even when Base44 integration credits are exhausted — all track, artist, and chart requests route through the independent Cloudflare Worker proxy, separate from the billing",
+    "Crash isolation at app, route, and section level — a single broken component never takes down the whole app, and a retry is always one click away"
   ],
   "platforms": {
     "web": {
       "available": true,
-      "version": "1.1.7",
+      "version": "1.1.8",
       "url": "https://sonora-hub.base44.app",
       "type": "pwa"
     },
     "electron": {
       "available": true,
-      "version": "1.1.7",
+      "version": "1.1.8",
       "architecture": "x64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "nsis",
@@ -42,7 +33,7 @@
     },
     "android": {
       "available": true,
-      "version": "1.1.7",
+      "version": "1.1.8",
       "architecture": "arm64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "apk",
@@ -51,7 +42,7 @@
     },
     "ios": {
       "available": false,
-      "version": "1.1.7",
+      "version": "1.1.8",
       "appStoreUrl": null,
       "type": "appstore",
       "channel": "stable"
