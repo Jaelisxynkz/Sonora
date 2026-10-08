@@ -1,0 +1,67 @@
+{
+  "appId": "com.sonora.app",
+  "appName": "Sonora",
+  "webDir": "dist",
+  "server": {
+    "url": "https://sonora-delectable-sonic-flow.base44.app",
+    "cleartext": false,
+    "androidScheme": "https",
+    "iosScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0a0a0f",
+    "webContentsDebuggingEnabled": false,
+    "captureInput": true
+  },
+  "ios": {
+    "backgroundColor": "#0a0a0f",
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "backgroundColor": "#0a0a0f",
+      "androidSplashResourceName": "splash",
+      "iosSplashResourceName": "Splash",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "backgroundColor": "#0a0a0f",
+      "style": "DARK"
+    },
+    "App": {
+      "backgroundColor": "#0a0a0f"
+    },
+    "NavigationBar": {
+      "backgroundColor": "#0a0a0f",
+      "style": "DARK"
+    },
+    "DeepLinking": {
+      "sonora": {
+        "scheme": "sonora"
+      }
+    },
+    "MediaSession": {
+      "androidArtworkType": "bitmap",
+      "iosArtworkType": "url"
+    },
+    "BackgroundAudio": {
+      "enabled": true
+    },
+    "Share": {
+      "enabled": true
+    },
+    "Browser": {
+      "enabled": true
+    },
+    "Haptics": {
+      "enabled": true
+    },
+    "LocalNotifications": {
+      "enabled": true
+    }
+  },
+  "cordova": {}
+}
