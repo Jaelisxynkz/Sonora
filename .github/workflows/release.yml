@@ -1,13 +1,35 @@
-# Sonora release workflow — builds the real Windows installer + Android APK
-# and publishes them as a GitHub Release. The Windows job is self-contained
-# (builds + publishes), so the .exe is always available even if the Android
-# job fails. electron-updater reads latest.yml from this release for auto-updates.
+# Sonora release pipeline — builds the real Windows installer + Android APK
+# and publishes them to a single GitHub Release that electron-updater and the
+# Download Center both read.
 #
-# COPY THIS FILE TO: .github/workflows/release.yml in your GitHub repository
-# (or edit the existing one to match).
+# NOTE: The LIVE copy of this workflow lives at .github/workflows/release.yml
+# (GitHub Actions only reads files under .github/workflows/). This copy is kept
+# for reference — keep the two in sync, or edit only .github/workflows/release.yml.
 #
-# Run: GitHub → Actions → "Release Sonora apps" → Run workflow (or push a v* tag).
-# The version comes from package.json.
+# SINGLE SOURCE OF TRUTH: src/services/platform/version.js (APP_VERSION).
+#   1. Bump APP_VERSION in src/services/platform/version.js
+#   2. Edit releaseNotes in sonora-release.json
+#   3. Commit, then EITHER push a `v<version>` tag OR run this workflow manually
+#      (GitHub → Actions → "Release Sonora apps" → Run workflow)
+#   → The workflow syncs package.json + sonora-release.json to APP_VERSION,
+#     builds both artifacts in parallel, and publishes release v<version> with:
+#       • Sonora-Setup-<version>.exe  + latest.yml   (electron-updater)
+#       • Sonora-<version>.apk                      (Android)
+#   → Existing desktop installs auto-update on next launch (electron-updater
+#     reads latest.yml from the release marked "latest").
+#   → Existing Android installs update by installing the new APK (same signing
+#     key → Android treats it as an update, not a fresh install).
+#
+# RELIABILITY GUARANTEES:
+#   • Windows + Android build in PARALLEL — one failing never blocks the other.
+#   • A release is only created when a build actually produced its artifact
+#     (no empty releases that break auto-update).
+#   • A final `verify` job fails loudly if the release is missing any required
+#     asset (.exe, latest.yml, .apk).
+#   • The release is marked `make_latest: true` so electron-updater's
+#     /releases/latest lookup always finds the pre-release.
+#   • The Android signing key is stable across builds (secret → cache →
+#     one-time generate) so APKs install as updates.
 
 name: Release Sonora apps
 
@@ -19,25 +41,60 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  windows:
-    runs-on: windows-latest
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Resolve version
+      - name: Resolve version (single source of truth: version.js)
+        id: ver
+        run: |
+          VERSION=$(node -e "const fs=require('fs');const m=fs.readFileSync('src/services/platform/version.js','utf8').match(/APP_VERSION\s*=\s*\"([^\"]+)\"/);console.log(m?m[1]:'')")
+          if [ -z "$VERSION" ]; then echo "::error::Could not read APP_VERSION from src/services/platform/version.js"; exit 1; fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Resolved APP_VERSION: $VERSION"
+          # If triggered by a tag, enforce tag === APP_VERSION to prevent orphan tags.
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            TAG="${TAG#v}"
+            if [ "$TAG" != "$VERSION" ]; then
+              echo "::error::Pushed tag v$TAG does not match APP_VERSION $VERSION in src/services/platform/version.js. Bump version.js to $TAG, commit, then tag."
+              exit 1
+            fi
+          fi
+
+  windows:
+    needs: prepare
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Sync version + generate release notes
         shell: bash
-        run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
-      - name: Prepare a lean desktop package
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('sonora-release.json','utf8'));p.version=process.env.VERSION;fs.writeFileSync('sonora-release.json',JSON.stringify(p,null,2));"
+          node -p "(require('./sonora-release.json').releaseNotes||[]).map(n=>'- '+n).join('\n')" > notes.md
+          echo "Release notes:"; cat notes.md
+      - name: Prepare lean desktop package
         shell: bash
         run: |
           node -e "
             const fs=require('fs');
-            const p=JSON.parse(fs.readFileSync('package.json','utf8'));
             const out={
-              name:'sonora', productName:'Sonora', version:p.version,
+              name:'sonora', productName:'Sonora', version:process.env.VERSION,
               description:'Sonora - premium music streaming', author:'Sonora',
               main:'electron/main.js',
               repository:{type:'git',url:'https://github.com/'+process.env.GITHUB_REPOSITORY+'.git'}
@@ -47,25 +104,30 @@ jobs:
           rm -rf node_modules package-lock.json
           npm install --no-audit --no-fund electron-updater@^6.3.9 discord-rpc@^4.0.1
           npm install --no-audit --no-fund -D electron@^33.2.0 electron-builder@^25.1.8
-      - name: Release notes
-        shell: bash
-        run: node -p "(require('./sonora-release.json').releaseNotes||[]).map(n=>'- '+n).join('\n')" > notes.md
       - name: Build Windows installer
         run: npx electron-builder --win --x64 --config electron-builder.yml --publish never
+      - name: Verify installer artifacts exist
+        shell: bash
+        run: |
+          ls -la release/ || true
+          test -f release/latest.yml || { echo "::error::latest.yml missing — electron-updater cannot work"; exit 1; }
+          ls release/*.exe >/dev/null 2>&1 || { echo "::error::No .exe produced"; exit 1; }
+          echo "Windows installer OK"
       - uses: actions/upload-artifact@v4
         with:
-          name: windows
+          name: windows-installer
           if-no-files-found: error
           path: |
             release/*.exe
             release/*.blockmap
             release/latest.yml
-      - name: Publish release
+      - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
-          name: Sonora ${{ env.VERSION }}
+          name: Sonora ${{ env.VERSION }} (Pre-Release)
           body_path: notes.md
+          prerelease: true
           make_latest: true
           files: |
             release/*.exe
@@ -73,8 +135,10 @@ jobs:
             release/latest.yml
 
   android:
-    needs: windows
+    needs: prepare
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -84,50 +148,130 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      - name: Restore signing keystore (stable across builds)
+        id: keystore
+        uses: actions/cache@v4
+        with:
+          path: /tmp/sonora.keystore
+          key: sonora-android-keystore-v1
+      - name: Prepare keystore (secret → cache → generate)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > /tmp/sonora.keystore
+            echo "STORE_PASS=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
+            echo "Using keystore from repository secret (permanent)."
+          elif [ -f /tmp/sonora.keystore ]; then
+            echo "STORE_PASS=sonora-release" >> $GITHUB_ENV
+            echo "Using cached keystore (stable across builds)."
+          else
+            echo "::warning::No secret and no cache hit — generating a NEW keystore. Set ANDROID_KEYSTORE_BASE64 + ANDROID_KEYSTORE_PASSWORD secrets for permanent stable signing (download the keystore artifact from this run)."
+            keytool -genkeypair -v -keystore /tmp/sonora.keystore -alias sonora -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass sonora-release -keypass sonora-release -dname "CN=Sonora, O=Sonora, C=EG"
+            echo "STORE_PASS=sonora-release" >> $GITHUB_ENV
+          fi
       - name: Prepare Capacitor project
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
           mkdir -p /tmp/sonora-android && cd /tmp/sonora-android
           npm init -y >/dev/null
           npm install --no-audit --no-fund @capacitor/core@^6.2.0 @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0 @capacitor/assets@^3.0.5
           cp $GITHUB_WORKSPACE/capacitor.config.json .
           mkdir -p dist assets
           cp $GITHUB_WORKSPACE/electron/offline.html dist/index.html
-          cp $GITHUB_WORKSPACE/assets/icon-only.png assets/icon-only.png
+          # capacitor-assets expects assets/icon.png (1024x1024) as the source.
+          # icon-only.png is our 1024 master — copy it under the expected name
+          # so the APK ships the Sonora icon, not the default Capacitor one.
+          cp $GITHUB_WORKSPACE/assets/icon-only.png assets/icon.png
           npx cap add android
+          # Strip the Android WebView ("wv") marker from the user agent so
+          # Google OAuth doesn't reject the app as an embedded browser
+          # (disallowed_useragent). Same fix the Electron build applies.
+          cat > android/app/src/main/java/com/sonora/app/MainActivity.java <<'JAVA'
+          package com.sonora.app;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import com.getcapacitor.BridgeActivity;
+          public class MainActivity extends BridgeActivity {
+            @Override
+            public void onCreate(Bundle savedInstanceState) {
+              super.onCreate(savedInstanceState);
+              try {
+                WebView webView = this.bridge.getWebView();
+                if (webView != null) {
+                  String ua = webView.getSettings().getUserAgentString();
+                  if (ua != null) {
+                    String clean = ua.replaceAll("(?i)\\bwv\\b", "")
+                      .replaceAll("(?i)Version/4\\.0\\s", "")
+                      .replaceAll("\\s{2,}", " ").trim();
+                    webView.getSettings().setUserAgentString(clean);
+                  }
+                }
+              } catch (Exception e) { }
+            }
+          }
+          JAVA
           npx capacitor-assets generate --android --iconBackgroundColor '#0a0a0f' --iconBackgroundColorDark '#0a0a0f' --splashBackgroundColor '#0a0a0f' --splashBackgroundColorDark '#0a0a0f' || echo "icon generation skipped"
           npx cap sync android
           CODE=$(echo $VERSION | awk -F. '{print $1*10000+$2*100+$3}')
           sed -i "s/versionCode [0-9]*/versionCode $CODE/; s/versionName \".*\"/versionName \"$VERSION\"/" android/app/build.gradle
-      - name: Signing key
-        env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: |
-          cd /tmp/sonora-android
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > sonora.keystore
-            echo "STORE_PASS=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
-          else
-            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret - using a one-time key. Add the secret so future APKs install as updates."
-            keytool -genkeypair -v -keystore sonora.keystore -alias sonora -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass sonora-release -keypass sonora-release -dname "CN=Sonora, O=Sonora, C=EG"
-            echo "STORE_PASS=sonora-release" >> $GITHUB_ENV
-          fi
       - name: Build signed APK
         run: |
           cd /tmp/sonora-android/android
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon \
-            -Pandroid.injected.signing.store.file=/tmp/sonora-android/sonora.keystore \
+            -Pandroid.injected.signing.store.file=/tmp/sonora.keystore \
             -Pandroid.injected.signing.store.password=$STORE_PASS \
             -Pandroid.injected.signing.key.alias=sonora \
             -Pandroid.injected.signing.key.password=$STORE_PASS
           mkdir -p $GITHUB_WORKSPACE/out
           cp app/build/outputs/apk/release/app-release.apk $GITHUB_WORKSPACE/out/Sonora-$VERSION.apk
-      - name: Upload APK to release
+      - name: Verify APK exists
+        run: |
+          ls -la out/ || true
+          test -f out/Sonora-$VERSION.apk || { echo "::error::No APK produced"; exit 1; }
+          echo "Android APK OK"
+      - name: Upload keystore artifact (promote to secret for permanent signing)
+        if: steps.keystore.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-keystore
+          path: /tmp/sonora.keystore
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          if-no-files-found: error
+          path: out/*.apk
+      - name: Publish APK to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
+          prerelease: true
+          make_latest: true
           files: out/*.apk
+
+  verify:
+    needs: [prepare, windows, android]
+    runs-on: ubuntu-latest
+    if: ${{ always() && needs.prepare.result == 'success' }}
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Verify release has all required assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 8
+          echo "Checking release v$VERSION..."
+          ASSETS=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' 2>/dev/null || true)
+          if [ -z "$ASSETS" ]; then
+            echo "::error::Release v$VERSION not found or has no assets. The build jobs likely failed — check the windows/android logs."
+            exit 1
+          fi
+          echo "Assets:"; echo "$ASSETS"
+          echo "$ASSETS" | grep -q '\.exe$' || { echo "::error::Release missing .exe — desktop auto-update will fail"; exit 1; }
+          echo "$ASSETS" | grep -q 'latest.yml' || { echo "::error::Release missing latest.yml — electron-updater will fail"; exit 1; }
+          echo "$ASSETS" | grep -q '\.apk$' || { echo "::error::Release missing .apk — Android download will fail"; exit 1; }
+          echo "✓ Release v$VERSION has all required assets (.exe, latest.yml, .apk). Auto-update will work."
