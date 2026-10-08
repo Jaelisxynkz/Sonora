@@ -55,7 +55,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Resolve version (single source of truth: version.js)
+      - name: "Resolve version (single source of truth: version.js)"
         id: ver
         run: |
           VERSION=$(node -e "const fs=require('fs');const m=fs.readFileSync('src/services/platform/version.js','utf8').match(/APP_VERSION\s*=\s*\"([^\"]+)\"/);console.log(m?m[1]:'')")
