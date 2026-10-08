@@ -31,4 +31,13 @@ contextBridge.exposeInMainWorld("sonoraDesktop", {
 
   // Deep-link routing: the main process sends a path, the renderer routes it.
   onDeepLink: (cb) => ipcRenderer.on("sonora:deep-link", (_e, p) => cb(p)),
+
+  // Discord Rich Presence — real IPC to the discord-rpc handler in the main
+  // process. Selected automatically by adapters/index.js on the desktop build.
+  discord: {
+    init: (clientId) => ipcRenderer.invoke("sonora:discord:init", clientId),
+    setActivity: (activity) => ipcRenderer.invoke("sonora:discord:set-activity", activity),
+    clearActivity: () => ipcRenderer.invoke("sonora:discord:clear-activity"),
+    disconnect: () => ipcRenderer.invoke("sonora:discord:disconnect"),
+  },
 });
