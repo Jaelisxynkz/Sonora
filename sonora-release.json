@@ -1,54 +1,57 @@
 {
-  "version": "1.1.5",
+  "version": "1.1.7",
+  "build": 8,
   "codename": "Aurora",
-  "releaseDate": "2026-10-08",
+  "releaseDate": "2026-10-09",
   "minVersion": "1.0.0",
   "mandatory": false,
   "channel": "stable",
   "releaseNotes": [
-    "Cloudflare Worker share routes now live — Discord, X, and WhatsApp rich embeds render with real artwork and track metadata",
+    "On-launch auto-update check — every app start verifies you're on the latest version and guides you to install it, so you're never running stale",
+    "New-account sign-up no longer hangs on a loading screen — registration completes instantly every time",
+    "Android infinite-load fixed — the service worker is torn down on native, eliminating stale-shell hangs inside the WebView",
+    "Smoother Android cold start — the native splash hides the moment the app is ready instead of waiting on a fixed timer",
+    "Android hardware back button now closes the lyrics overlay, then the expanded player, navigates back, and exits from Home",
+    "Google sign-in now works on the Android app — the WebView user-agent is corrected so OAuth no longer rejects it as an embedded browser",
+    "The Android app installs with the real Sonora icon, not the default Capacitor one",
+    "Faster cover-art loading across the app — preconnect to the image CDN, priority loading for above-the-fold artwork, and no skeleton flash on cached images",
+    "Cloudflare Worker share routes are live — Discord, X, and WhatsApp rich embeds render with real artwork and track metadata",
     "Share artwork proxy guarantees image delivery on every platform, bypassing CDN blocking",
-    "Release channel stabilized to 'stable' for reliable auto-update detection across all installed versions",
     "Discord Rich Presence shows 'Listening to Sonora' with a live progress bar — indistinguishable from Spotify's integration",
-    "Mobile build fixes — Google sign-in now works on the Android app (WebView user-agent corrected), and the app installs with the real Sonora icon",
-    "Premium rich embeds — share any song or playlist to Discord, X, WhatsApp and more with real artwork + metadata",
-    "Upgraded Share sheet with live preview, Discord, QR code and social intents",
-    "Shared links open the exact song or playlist, even after signing in",
     "Multi-artist Smart Playlist — search and blend any number of artists into one taste-ranked playlist",
     "Artist Mixes for every artist — Spotify-style mixes generated on demand",
+    "Shared links open the exact song or playlist, even after signing in",
     "Pages auto-load with zero flash — cross-mount caching eliminates skeleton stutter",
-    "Discord Rich Presence shows 'Listening to Sonora' with a live progress bar, album art, and dual buttons"
+    "Release channel stabilized to 'stable' for reliable auto-update detection across all installed versions"
   ],
   "platforms": {
     "web": {
       "available": true,
-      "version": "1.1.5",
+      "version": "1.1.7",
       "url": "https://sonora-hub.base44.app",
       "type": "pwa"
     },
     "electron": {
       "available": true,
-      "version": "1.1.5",
+      "version": "1.1.7",
       "architecture": "x64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "nsis",
-      "size": 82268757,
       "sha256": null,
       "channel": "stable"
     },
     "android": {
       "available": true,
-      "version": "1.1.5",
+      "version": "1.1.7",
       "architecture": "arm64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "apk",
-      "size": 3007834,
       "sha256": null,
       "channel": "stable"
     },
     "ios": {
       "available": false,
-      "version": "1.1.5",
+      "version": "1.1.7",
       "appStoreUrl": null,
       "type": "appstore",
       "channel": "stable"
