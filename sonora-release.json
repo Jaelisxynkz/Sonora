@@ -1,11 +1,12 @@
 {
-  "version": "1.1.3",
+  "version": "1.1.4",
   "codename": "Aurora",
   "releaseDate": "2026-10-08",
   "minVersion": "1.0.0",
   "mandatory": false,
   "channel": "pre-release",
   "releaseNotes": [
+    "Discord Rich Presence now shows 'Listening to Sonora' with a live progress bar — indistinguishable from Spotify's integration (was incorrectly showing 'Playing')",
     "Mobile build fixes — Google sign-in now works on the Android app (WebView user-agent corrected), and the app installs with the real Sonora icon",
     "Android app reliability — the full Sonora experience loads consistently in the native WebView",
     "Premium rich embeds — share any song or playlist to Discord, X, WhatsApp and more with real artwork + metadata",
@@ -21,13 +22,13 @@
   "platforms": {
     "web": {
       "available": true,
-      "version": "1.1.3",
+      "version": "1.1.4",
       "url": "https://sonora-hub.base44.app",
       "type": "pwa"
     },
     "electron": {
       "available": true,
-      "version": "1.1.3",
+      "version": "1.1.4",
       "architecture": "x64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "nsis",
@@ -37,7 +38,7 @@
     },
     "android": {
       "available": true,
-      "version": "1.1.3",
+      "version": "1.1.4",
       "architecture": "arm64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "apk",
@@ -47,7 +48,7 @@
     },
     "ios": {
       "available": false,
-      "version": "1.1.3",
+      "version": "1.1.4",
       "appStoreUrl": null,
       "type": "appstore",
       "channel": "pre-release"
