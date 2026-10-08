@@ -107,9 +107,15 @@ function createWindow() {
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     mainWindow.loadURL(APP_URL);
+    const showOffline = () => mainWindow.loadFile(path.join(__dirname, "offline.html"));
     // No connection → branded offline screen with a retry button.
     mainWindow.webContents.on("did-fail-load", (_e, code, _desc, _url, isMainFrame) => {
-      if (isMainFrame && code !== -3) mainWindow.loadFile(path.join(__dirname, "offline.html"));
+      if (isMainFrame && code !== -3) showOffline();
+    });
+    // Server error on the app itself (e.g. 404/5xx) → same retry screen
+    // instead of a raw JSON error page.
+    mainWindow.webContents.on("did-navigate", (_e, url, httpCode) => {
+      if (httpCode >= 400 && url.startsWith(APP_URL)) showOffline();
     });
   }
 
@@ -251,6 +257,10 @@ function setupAutoUpdater() {
 }
 
 // ---- App lifecycle --------------------------------------------------------
+// Present a standard Chrome user agent so Google sign-in isn't blocked as an
+// "embedded browser".
+app.userAgentFallback = app.userAgentFallback.replace(/\s(Electron|sonora|Sonora)\/\S+/g, "");
+
 app.whenReady().then(() => {
   // Register the deep-link protocol (Windows).
   if (process.platform === "win32") app.setAsDefaultProtocolClient(PROTOCOL);

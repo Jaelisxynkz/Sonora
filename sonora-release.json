@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "codename": "Aurora",
   "releaseDate": "2026-10-08",
   "minVersion": "1.0.0",
@@ -16,13 +16,13 @@
   "platforms": {
     "web": {
       "available": true,
-      "version": "1.1.0",
+      "version": "1.1.1",
       "url": "https://sonora-hub.base44.app",
       "type": "pwa"
     },
     "electron": {
       "available": true,
-      "version": "1.1.0",
+      "version": "1.1.1",
       "architecture": "x64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "nsis",
@@ -32,7 +32,7 @@
     },
     "android": {
       "available": true,
-      "version": "1.1.0",
+      "version": "1.1.1",
       "architecture": "arm64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "apk",
@@ -42,7 +42,7 @@
     },
     "ios": {
       "available": false,
-      "version": "1.1.0",
+      "version": "1.1.1",
       "appStoreUrl": null,
       "type": "appstore",
       "channel": "pre-release"

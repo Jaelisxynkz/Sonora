@@ -25,7 +25,7 @@
 //   4. Redeploy this worker
 // Every installed Sonora detects the update on next launch.
 const RELEASE = {
-  version: "1.1.0",
+  version: "1.1.1",
   codename: "Aurora",
   releaseDate: "2026-10-08",
   minVersion: "1.0.0",
@@ -44,13 +44,13 @@ const RELEASE = {
   platforms: {
     web: {
       available: true,
-      version: "1.1.0",
+      version: "1.1.1",
       url: "https://sonora-hub.base44.app",
       type: "pwa",
     },
     electron: {
       available: true,
-      version: "1.1.0",
+      version: "1.1.1",
       architecture: "x64",
       url: "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       type: "nsis",
@@ -60,7 +60,7 @@ const RELEASE = {
     },
     android: {
       available: true,
-      version: "1.1.0",
+      version: "1.1.1",
       architecture: "arm64",
       url: "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       type: "apk",
@@ -70,7 +70,7 @@ const RELEASE = {
     },
     ios: {
       available: false,
-      version: "1.1.0",
+      version: "1.1.1",
       appStoreUrl: null,
       type: "appstore",
       channel: "pre-release",
