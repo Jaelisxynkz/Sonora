@@ -25,6 +25,9 @@ const { autoUpdater } = require("electron-updater");
 const APP_URL = "https://sonora-hub.base44.app";
 
 let mainWindow = null;
+// Tracks whether electron-updater has finished downloading an update, so the
+// install handler can skip a redundant download and go straight to install.
+let updateDownloaded = false;
 
 // ---- Window state persistence --------------------------------------------
 // Remember the window's bounds + maximized state across launches.
@@ -131,6 +134,24 @@ function createWindow() {
 // ---- IPC handlers ---------------------------------------------------------
 ipcMain.on("sonora:quit-and-install", () => {
   autoUpdater.quitAndInstall();
+});
+// Canonical update flow used by the in-app "Update Now" button. Downloads the
+// update first (idempotent — returns the in-flight promise if auto-download
+// already started), then quits and installs. Calling quitAndInstall before a
+// download exists throws "No update filepath provided", so this handler is
+// the only safe path for a user-initiated install from the renderer.
+ipcMain.handle("sonora:install-update", async () => {
+  try {
+    if (!updateDownloaded) {
+      await autoUpdater.downloadUpdate();
+      updateDownloaded = true;
+    }
+    autoUpdater.quitAndInstall();
+    return true;
+  } catch (err) {
+    if (mainWindow) mainWindow.webContents.send("sonora:update-error", err?.message || "Update failed");
+    return false;
+  }
 });
 ipcMain.on("sonora:open-external", (_e, url) => {
   if (typeof url === "string") shell.openExternal(url);
@@ -296,6 +317,7 @@ function setupAutoUpdater() {
     if (mainWindow) mainWindow.webContents.send("sonora:update-progress", Math.round(p.percent));
   });
   autoUpdater.on("update-downloaded", () => {
+    updateDownloaded = true;
     if (mainWindow) mainWindow.webContents.send("sonora:update-ready");
   });
   autoUpdater.on("error", (err) => {

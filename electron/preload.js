@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld("sonoraDesktop", {
 
   // Hand off to electron-updater: quit, install the downloaded update, restart.
   quitAndInstall: () => ipcRenderer.send("sonora:quit-and-install"),
+  // Download (if needed) then quit and install — the safe path for the
+  // in-app "Update Now" button. Resolves true once the install is handed off.
+  installUpdate: () => ipcRenderer.invoke("sonora:install-update"),
 
   // Open a URL in the system browser.
   openExternal: (url) => ipcRenderer.send("sonora:open-external", url),

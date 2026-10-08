@@ -1,6 +1,6 @@
 {
-  "version": "1.1.8",
-  "build": 9,
+  "version": "1.1.9",
+  "build": 10,
   "codename": "Aurora",
   "releaseDate": "2026-10-09",
   "minVersion": "1.0.0",
@@ -13,18 +13,19 @@
     "Boot splash can no longer hang — public-settings and auth checks are bounded by timeouts, so the app always reaches the music within seconds even on a slow connection",
     "Every page load is bounded by a 15s safety timeout — a stuck backend never leaves a spinner spinning forever; it resolves to a retryable error state instead",
     "Music data keeps flowing even when Base44 integration credits are exhausted — all track, artist, and chart requests route through the independent Cloudflare Worker proxy, separate from the billing",
-    "Crash isolation at app, route, and section level — a single broken component never takes down the whole app, and a retry is always one click away"
+    "Crash isolation at app, route, and section level — a single broken component never takes down the whole app, and a retry is always one click away",
+    "The in-app 'Update Now' button now downloads the update before installing — it no longer fails with 'No update filepath provided', and repeated taps no longer stack a wall of identical error toasts"
   ],
   "platforms": {
     "web": {
       "available": true,
-      "version": "1.1.8",
+      "version": "1.1.9",
       "url": "https://sonora-hub.base44.app",
       "type": "pwa"
     },
     "electron": {
       "available": true,
-      "version": "1.1.8",
+      "version": "1.1.9",
       "architecture": "x64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "nsis",
@@ -33,7 +34,7 @@
     },
     "android": {
       "available": true,
-      "version": "1.1.8",
+      "version": "1.1.9",
       "architecture": "arm64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "apk",
@@ -42,7 +43,7 @@
     },
     "ios": {
       "available": false,
-      "version": "1.1.8",
+      "version": "1.1.9",
       "appStoreUrl": null,
       "type": "appstore",
       "channel": "stable"
