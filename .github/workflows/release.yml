@@ -125,9 +125,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
-          name: Sonora ${{ env.VERSION }} (Pre-Release)
+          name: Sonora ${{ env.VERSION }} 
           body_path: notes.md
-          prerelease: true
+          prerelease: false
           make_latest: true
           files: |
             release/*.exe
@@ -248,7 +248,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
-          prerelease: true
+          prerelease: false
           make_latest: true
           files: out/*.apk
 
