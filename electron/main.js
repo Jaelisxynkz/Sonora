@@ -178,37 +178,50 @@ async function discordInit(clientId) {
 async function discordSetActivity(activity) {
   if (!discordClient || !discordReady) return false;
   try {
-    // Build a clean wire-format payload and force type 2 (Listening) so Discord
-    // always shows "Listening to Sonora" with the live progress bar — exactly
-    // like Spotify. The camelCase aliases (startTimestamp, largeImageKey, …)
-    // are included for discord-rpc v3 compatibility; v4 reads the snake_case
-    // nested objects. Extra fields like _meta are already stripped by the
-    // manager, but we reconstruct here so nothing unexpected leaks through.
-    const wire = {
-      type: 2,
-      name: activity.name || "Sonora",
-      details: activity.details,
+    // ROOT CAUSE OF "Playing" vs "Listening to":
+    // discord-rpc v4's setActivity() builds the activity from a HARDCODED field
+    // list (state, details, timestamps, assets, party, secrets, buttons,
+    // instance) — it does NOT forward `type`. So even though we pass type:2,
+    // the library silently drops it and Discord defaults to type 0 (Playing),
+    // showing "Playing Sonora" with a game-controller icon.
+    //
+    // FIX: bypass setActivity() and call the raw SET_ACTIVITY command via the
+    // client's request() method, building the wire-format activity ourselves
+    // so `type: 2` (ActivityType.LISTENING) actually reaches Discord. This is
+    // the same workaround used by other music apps (e.g. Music Presence) to
+    // get "Listening to <app>" with the live progress bar — exactly like
+    // Spotify. Discord has supported type 2 + timestamps for third-party RPC
+    // since mid-2024.
+    const act = {
+      type: 2, // ActivityType.LISTENING → "Listening to" + progress bar
       state: activity.state,
-      timestamps: activity.timestamps || undefined,
-      assets: activity.assets || undefined,
-      buttons: Array.isArray(activity.buttons) ? activity.buttons : undefined,
-      // instance:false forces "Listening to" (type 2) — true shows "Playing"
-      // and suppresses the progress bar. Spotify uses false.
+      details: activity.details,
+      // instance:false = a listening activity, not a joinable game instance.
+      // true makes Discord treat it as a game and suppresses the progress bar.
       instance: false,
     };
     if (activity.timestamps) {
-      wire.startTimestamp = activity.timestamps.start;
-      if (activity.timestamps.end) wire.endTimestamp = activity.timestamps.end;
+      // Both start + end → Discord renders the live progress bar (elapsed /
+      // remaining), the same way Spotify's presence does.
+      act.timestamps = {
+        start: activity.timestamps.start,
+        ...(activity.timestamps.end != null ? { end: activity.timestamps.end } : {}),
+      };
     }
     if (activity.assets) {
-      wire.largeImageKey = activity.assets.large_image;
-      wire.largeImageText = activity.assets.large_text;
-      wire.smallImageKey = activity.assets.small_image;
-      wire.smallImageText = activity.assets.small_text;
+      act.assets = {
+        large_image: activity.assets.large_image,
+        large_text: activity.assets.large_text,
+        small_image: activity.assets.small_image,
+        small_text: activity.assets.small_text,
+      };
     }
-    // Remove undefined keys so Discord doesn't receive nulls.
-    Object.keys(wire).forEach((k) => wire[k] === undefined && delete wire[k]);
-    await discordClient.setActivity(wire);
+    if (Array.isArray(activity.buttons) && activity.buttons.length) {
+      act.buttons = activity.buttons.slice(0, 2);
+    }
+    // Strip undefined keys so Discord doesn't receive nulls.
+    Object.keys(act).forEach((k) => act[k] === undefined && delete act[k]);
+    await discordClient.request("SET_ACTIVITY", { pid: process.pid, activity: act });
     return true;
   } catch {
     return false;
