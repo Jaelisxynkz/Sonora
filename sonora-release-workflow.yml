@@ -1,0 +1,141 @@
+# COPY THIS FILE TO: .github/workflows/release.yml in your GitHub repository
+# (GitHub → your repo → Add file → Create new file → name it
+#  .github/workflows/release.yml → paste this content → Commit).
+#
+# Builds the real Sonora installers on GitHub's free build machines and
+# publishes them as a GitHub Release:
+#   - Windows: Sonora-Setup-<version>.exe  (NSIS installer + auto-update files)
+#   - Android: Sonora-<version>.apk        (signed, installable)
+# The Sonora Cloudflare Worker reads the latest release automatically, so the
+# Download Center switches to real download buttons as soon as this finishes.
+#
+# Run it: GitHub → Actions → "Release Sonora apps" → Run workflow
+# (or push a tag like v1.0.1). The version comes from package.json.
+
+name: Release Sonora apps
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Prepare a lean desktop package
+        shell: bash
+        run: |
+          node -e "
+            const fs=require('fs');
+            const p=JSON.parse(fs.readFileSync('package.json','utf8'));
+            const out={
+              name:'sonora', productName:'Sonora', version:p.version,
+              description:'Sonora - premium music streaming', author:'Sonora',
+              main:'electron/main.js',
+              repository:{type:'git',url:'https://github.com/'+process.env.GITHUB_REPOSITORY+'.git'}
+            };
+            fs.writeFileSync('package.json',JSON.stringify(out,null,2));
+          "
+          rm -rf node_modules package-lock.json
+          npm install --no-audit --no-fund electron-updater@^6.3.9
+          npm install --no-audit --no-fund -D electron@^33.2.0 electron-builder@^25.1.8
+      - name: Build Windows installer
+        run: npx electron-builder --win --x64 --config electron-builder.yml --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          if-no-files-found: error
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Prepare Capacitor project
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          mkdir -p /tmp/sonora-android && cd /tmp/sonora-android
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund @capacitor/core@^6.2.0 @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0 @capacitor/assets@^3.0.5
+          cp $GITHUB_WORKSPACE/capacitor.config.json .
+          mkdir -p dist assets
+          cp $GITHUB_WORKSPACE/electron/offline.html dist/index.html
+          cp $GITHUB_WORKSPACE/assets/icon-only.png assets/icon-only.png
+          npx cap add android
+          npx capacitor-assets generate --android --iconBackgroundColor '#0a0a0f' --iconBackgroundColorDark '#0a0a0f' --splashBackgroundColor '#0a0a0f' --splashBackgroundColorDark '#0a0a0f' || echo "icon generation skipped"
+          npx cap sync android
+          # Version the APK so Android installs updates over the previous one.
+          CODE=$(echo $VERSION | awk -F. '{print $1*10000+$2*100+$3}')
+          sed -i "s/versionCode [0-9]*/versionCode $CODE/; s/versionName \".*\"/versionName \"$VERSION\"/" android/app/build.gradle
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          cd /tmp/sonora-android
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > sonora.keystore
+            echo "STORE_PASS=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
+          else
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret - using a one-time key. Add the secret so future APKs install as updates."
+            keytool -genkeypair -v -keystore sonora.keystore -alias sonora -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass sonora-release -keypass sonora-release -dname "CN=Sonora, O=Sonora, C=EG"
+            echo "STORE_PASS=sonora-release" >> $GITHUB_ENV
+          fi
+      - name: Build signed APK
+        run: |
+          cd /tmp/sonora-android/android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file=/tmp/sonora-android/sonora.keystore \
+            -Pandroid.injected.signing.store.password=$STORE_PASS \
+            -Pandroid.injected.signing.key.alias=sonora \
+            -Pandroid.injected.signing.key.password=$STORE_PASS
+          mkdir -p $GITHUB_WORKSPACE/out
+          cp app/build/outputs/apk/release/app-release.apk $GITHUB_WORKSPACE/out/Sonora-$VERSION.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          if-no-files-found: error
+          path: out/*.apk
+
+  publish:
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+      - name: Release notes
+        run: |
+          echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
+          node -p "(require('./sonora-release.json').releaseNotes||[]).map(n=>'- '+n).join('\n')" > notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Sonora ${{ env.VERSION }}
+          body_path: notes.md
+          make_latest: true
+          files: |
+            out/windows/*
+            out/android/*
