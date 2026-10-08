@@ -1,0 +1,46 @@
+# Sonora Desktop — electron-builder configuration.
+# Produces the real Windows installer "Sonora-Setup-<version>.exe".
+# Built automatically by .github/workflows/release.yml (windows-latest runner).
+#
+# The desktop shell loads the live Sonora app (same account, same backend),
+# so it never needs a separate web bundle and always runs the newest version.
+#
+# DATA SEPARATION: user data lives in %APPDATA%/Sonora and is preserved
+# across updates and uninstall (deleteAppDataOnUninstall: false).
+
+appId: com.sonora.desktop
+productName: Sonora
+copyright: Copyright © 2026 Sonora
+artifactName: "Sonora-Setup-${version}.${ext}"
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - electron/**/*
+  - build/icon.png
+  - package.json
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.png
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Sonora
+  uninstallDisplayName: Sonora
+  deleteAppDataOnUninstall: false
+
+# Auto-update: electron-updater reads latest.yml from the GitHub release the
+# workflow publishes. The repository comes from package.json "repository",
+# which the workflow sets to the repo it runs in.
+publish:
+  provider: github
