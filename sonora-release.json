@@ -1,57 +1,57 @@
 {
-  "version": "1.1.4",
+  "version": "1.1.5",
   "codename": "Aurora",
   "releaseDate": "2026-10-08",
   "minVersion": "1.0.0",
   "mandatory": false,
-  "channel": "pre-release",
+  "channel": "stable",
   "releaseNotes": [
-    "Discord Rich Presence now shows 'Listening to Sonora' with a live progress bar — indistinguishable from Spotify's integration (was incorrectly showing 'Playing')",
+    "Cloudflare Worker share routes now live — Discord, X, and WhatsApp rich embeds render with real artwork and track metadata",
+    "Share artwork proxy guarantees image delivery on every platform, bypassing CDN blocking",
+    "Release channel stabilized to 'stable' for reliable auto-update detection across all installed versions",
+    "Discord Rich Presence shows 'Listening to Sonora' with a live progress bar — indistinguishable from Spotify's integration",
     "Mobile build fixes — Google sign-in now works on the Android app (WebView user-agent corrected), and the app installs with the real Sonora icon",
-    "Android app reliability — the full Sonora experience loads consistently in the native WebView",
     "Premium rich embeds — share any song or playlist to Discord, X, WhatsApp and more with real artwork + metadata",
     "Upgraded Share sheet with live preview, Discord, QR code and social intents",
     "Shared links open the exact song or playlist, even after signing in",
     "Multi-artist Smart Playlist — search and blend any number of artists into one taste-ranked playlist",
-    "Artist Mixes for every artist — Spotify-style mixes generated on demand for any artist, not just your favorites",
-    "Mixes filter in Search — type an artist name and get their mix plus similar-artist mixes instantly",
-    "Pages auto-load with zero flash — cross-mount caching means no more skeleton stutter when navigating back",
-    "Search results appear instantly on cache hits — no debounce delay when returning to a previous query",
+    "Artist Mixes for every artist — Spotify-style mixes generated on demand",
+    "Pages auto-load with zero flash — cross-mount caching eliminates skeleton stutter",
     "Discord Rich Presence shows 'Listening to Sonora' with a live progress bar, album art, and dual buttons"
   ],
   "platforms": {
     "web": {
       "available": true,
-      "version": "1.1.4",
+      "version": "1.1.5",
       "url": "https://sonora-hub.base44.app",
       "type": "pwa"
     },
     "electron": {
       "available": true,
-      "version": "1.1.4",
+      "version": "1.1.5",
       "architecture": "x64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "nsis",
       "size": 82268757,
       "sha256": null,
-      "channel": "pre-release"
+      "channel": "stable"
     },
     "android": {
       "available": true,
-      "version": "1.1.4",
+      "version": "1.1.5",
       "architecture": "arm64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "apk",
       "size": 3007834,
       "sha256": null,
-      "channel": "pre-release"
+      "channel": "stable"
     },
     "ios": {
       "available": false,
-      "version": "1.1.4",
+      "version": "1.1.5",
       "appStoreUrl": null,
       "type": "appstore",
-      "channel": "pre-release"
+      "channel": "stable"
     }
   }
 }
