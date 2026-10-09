@@ -2,36 +2,19 @@
 # and publishes them to a single GitHub Release that electron-updater and the
 # Download Center both read.
 #
-# NOTE: The LIVE copy of this workflow lives at .github/workflows/release.yml
-# (GitHub Actions only reads files under .github/workflows/). This copy is kept
-# for reference — keep the two in sync, or edit only .github/workflows/release.yml.
-#
 # SINGLE SOURCE OF TRUTH: src/services/platform/version.js (APP_VERSION).
 #   1. Bump APP_VERSION in src/services/platform/version.js
 #   2. Edit releaseNotes in sonora-release.json
 #   3. Commit, then EITHER push a `v<version>` tag OR run this workflow manually
-#      (GitHub → Actions → "Release Sonora apps" → Run workflow)
-#   → The workflow syncs package.json + sonora-release.json to APP_VERSION,
-#     builds both artifacts in parallel, and publishes release v<version> with:
-#       • Sonora-Setup-<version>.exe  + latest.yml   (electron-updater)
-#       • Sonora-<version>.apk                      (Android)
-#   → Existing desktop installs auto-update on next launch (electron-updater
-#     reads latest.yml from the release marked "latest").
-#   → Existing Android installs update by installing the new APK (same signing
-#     key → Android treats it as an update, not a fresh install).
-#
-# RELIABILITY GUARANTEES:
-#   • Windows + Android build in PARALLEL — one failing never blocks the other.
-#   • A release is created ONLY after BOTH builds succeed and produce their
-#     artifacts. A single `release` job collects everything and publishes one
-#     release — no partial releases (missing .exe or .apk) can ever be marked
-#     "latest", which was the root cause of auto-update failures.
-#   • A final `verify` job fails loudly if the release is missing any required
-#     asset (.exe, latest.yml, .apk).
-#   • The release is marked `make_latest: true` so electron-updater's
-#     /releases/latest lookup always finds it.
-#   • The Android signing key is stable across builds (secret → cache →
-#     one-time generate) so APKs install as updates.
+#      (GitHub -> Actions -> "Release Sonora apps" -> Run workflow)
+#   -> The workflow syncs package.json + sonora-release.json to APP_VERSION,
+#      builds both artifacts in parallel, and publishes release v<version> with:
+#        - Sonora-Setup-<version>.exe  + latest.yml   (electron-updater)
+#        - Sonora-<version>.apk                      (Android)
+#   -> Existing desktop installs auto-update on next launch (electron-updater
+#      reads latest.yml from the release marked "latest").
+#   -> Existing Android installs update by installing the new APK (same signing
+#      key -> Android treats it as an update, not a fresh install).
 
 name: Release Sonora apps
 
@@ -60,16 +43,15 @@ jobs:
       - name: "Resolve version (single source of truth: version.js)"
         id: ver
         run: |
-          VERSION=$(node -e "const fs=require('fs');const m=fs.readFileSync('src/services/platform/version.js','utf8').match(/APP_VERSION\s*=\s*\"([^\"]+)\"/);console.log(m?m[1]:'')")
+          VERSION=$(node -e "const fs=require('fs');const m=fs.readFileSync('src/services/platform/version.js','utf8').match(/APP_VERSION\s*=\s*"([^"]+)"/);console.log(m?m[1]:'')")
           if [ -z "$VERSION" ]; then echo "::error::Could not read APP_VERSION from src/services/platform/version.js"; exit 1; fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Resolved APP_VERSION: $VERSION"
-          # If triggered by a tag, enforce tag === APP_VERSION to prevent orphan tags.
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
             TAG="${TAG#v}"
             if [ "$TAG" != "$VERSION" ]; then
-              echo "::error::Pushed tag v$TAG does not match APP_VERSION $VERSION in src/services/platform/version.js. Bump version.js to $TAG, commit, then tag."
+              echo "::error::Pushed tag v$TAG does not match APP_VERSION $VERSION. Bump version.js to $TAG, commit, then tag."
               exit 1
             fi
           fi
@@ -123,11 +105,18 @@ jobs:
             release/*.exe
             release/*.blockmap
             release/latest.yml
-      - uses: actions/upload-artifact@v4
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: release-notes
-          if-no-files-found: error
-          path: notes.md
+          tag_name: v${{ env.VERSION }}
+          name: Sonora ${{ env.VERSION }}
+          body_path: notes.md
+          prerelease: false
+          make_latest: true
+          files: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
 
   android:
     needs: prepare
@@ -149,7 +138,7 @@ jobs:
         with:
           path: /tmp/sonora.keystore
           key: sonora-android-keystore-v1
-      - name: Prepare keystore (secret → cache → generate)
+      - name: Prepare keystore (secret -> cache -> generate)
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -162,7 +151,7 @@ jobs:
             echo "STORE_PASS=sonora-release" >> $GITHUB_ENV
             echo "Using cached keystore (stable across builds)."
           else
-            echo "::warning::No secret and no cache hit — generating a NEW keystore. Set ANDROID_KEYSTORE_BASE64 + ANDROID_KEYSTORE_PASSWORD secrets for permanent stable signing (download the keystore artifact from this run)."
+            echo "::warning::No secret and no cache hit — generating a NEW keystore. Set ANDROID_KEYSTORE_BASE64 + ANDROID_KEYSTORE_PASSWORD secrets for permanent stable signing."
             keytool -genkeypair -v -keystore /tmp/sonora.keystore -alias sonora -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass sonora-release -keypass sonora-release -dname "CN=Sonora, O=Sonora, C=EG"
             echo "STORE_PASS=sonora-release" >> $GITHUB_ENV
@@ -171,12 +160,14 @@ jobs:
         run: |
           mkdir -p /tmp/sonora-android && cd /tmp/sonora-android
           npm init -y >/dev/null
-          npm install --no-audit --no-fund @capacitor/core@^6.2.0 @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0 @capacitor/app@^6.0.2 @capacitor/assets@^3.0.5
+          npm install --no-audit --no-fund @capacitor/core@^6.2.0 @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0 @capacitor/assets@^3.0.5 @capacitor/app@^6.0.2 @capacitor/browser@^6.0.4
           cp $GITHUB_WORKSPACE/capacitor.config.json .
           mkdir -p dist assets
           cp $GITHUB_WORKSPACE/electron/offline.html dist/index.html
           cp $GITHUB_WORKSPACE/assets/icon-only.png assets/icon.png
           npx cap add android
+          sed -i '0,/<\/intent-filter>/s//<\/intent-filter>\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" \/>\n                <category android:name="android.intent.category.DEFAULT" \/>\n                <category android:name="android.intent.category.BROWSABLE" \/>\n                <data android:scheme="sonora" \/>\n            <\/intent-filter>/' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:scheme="sonora"' android/app/src/main/AndroidManifest.xml || { echo "::error::sonora scheme not registered"; exit 1; }
           cat > android/app/src/main/java/com/sonora/app/MainActivity.java <<'JAVA'
           package com.sonora.app;
           import android.os.Bundle;
@@ -201,28 +192,6 @@ jobs:
             }
           }
           JAVA
-          # Register the sonora:// custom URL scheme in AndroidManifest.xml so
-          # the OS opens Sonora for deep links (browser-auth handoff, share
-          # links). Capacitor does NOT auto-register custom schemes — the
-          # "DeepLinking" key in capacitor.config.json is ignored. Without this
-          # intent filter, appUrlOpen events never fire on Android and the
-          # browser-auth handoff can't return to the app.
-          MANIFEST=android/app/src/main/AndroidManifest.xml
-          if ! grep -q 'android:scheme="sonora"' "$MANIFEST"; then
-            awk '
-              !done && /<\/activity>/ {
-                print "        <intent-filter>"
-                print "          <action android:name=\"android.intent.action.VIEW\" />"
-                print "          <category android:name=\"android.intent.category.DEFAULT\" />"
-                print "          <category android:name=\"android.intent.category.BROWSABLE\" />"
-                print "          <data android:scheme=\"sonora\" />"
-                print "        </intent-filter>"
-                done=1
-              }
-              {print}
-            ' "$MANIFEST" > /tmp/manifest.xml && mv /tmp/manifest.xml "$MANIFEST"
-            echo "Added sonora:// intent filter to AndroidManifest.xml"
-          fi
           npx capacitor-assets generate --android --iconBackgroundColor '#0a0a0f' --iconBackgroundColorDark '#0a0a0f' --splashBackgroundColor '#0a0a0f' --splashBackgroundColorDark '#0a0a0f' || echo "icon generation skipped"
           npx cap sync android
           CODE=$(echo $VERSION | awk -F. '{print $1*10000+$2*100+$3}')
@@ -255,50 +224,16 @@ jobs:
           name: android-apk
           if-no-files-found: error
           path: out/*.apk
-
-  release:
-    needs: [prepare, windows, android]
-    runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ needs.prepare.outputs.version }}
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: windows-installer
-          path: artifacts/windows
-      - uses: actions/download-artifact@v4
-        with:
-          name: android-apk
-          path: artifacts/android
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-notes
-          path: artifacts
-      - name: Verify all artifacts present before publishing
-        run: |
-          echo "Windows artifacts:"; ls -la artifacts/windows/ || true
-          echo "Android artifacts:"; ls -la artifacts/android/ || true
-          test -f artifacts/windows/latest.yml || { echo "::error::latest.yml missing"; exit 1; }
-          ls artifacts/windows/*.exe >/dev/null 2>&1 || { echo "::error::.exe missing"; exit 1; }
-          test -f artifacts/android/Sonora-$VERSION.apk || { echo "::error::.apk missing"; exit 1; }
-          test -f artifacts/notes.md || { echo "::error::notes.md missing"; exit 1; }
-          echo "All artifacts present — publishing release v$VERSION"
-      - name: Create GitHub release with all assets
+      - name: Publish APK to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
-          name: Sonora ${{ env.VERSION }}
-          body_path: artifacts/notes.md
           prerelease: false
           make_latest: true
-          files: |
-            artifacts/windows/*.exe
-            artifacts/windows/*.blockmap
-            artifacts/windows/latest.yml
-            artifacts/android/*.apk
+          files: out/*.apk
 
   verify:
-    needs: [prepare, release]
+    needs: [prepare, windows, android]
     runs-on: ubuntu-latest
     if: ${{ always() && needs.prepare.result == 'success' }}
     env:
@@ -319,4 +254,4 @@ jobs:
           echo "$ASSETS" | grep -q '\.exe$' || { echo "::error::Release missing .exe — desktop auto-update will fail"; exit 1; }
           echo "$ASSETS" | grep -q 'latest.yml' || { echo "::error::Release missing latest.yml — electron-updater will fail"; exit 1; }
           echo "$ASSETS" | grep -q '\.apk$' || { echo "::error::Release missing .apk — Android download will fail"; exit 1; }
-          echo "✓ Release v$VERSION has all required assets (.exe, latest.yml, .apk). Auto-update will work."
+          echo "Release v$VERSION has all required assets (.exe, latest.yml, .apk). Auto-update will work."
