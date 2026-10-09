@@ -43,7 +43,7 @@ jobs:
       - name: "Resolve version (single source of truth: version.js)"
         id: ver
         run: |
-          VERSION=$(node -e 'const fs=require("fs");const m=fs.readFileSync("src/services/platform/version.js","utf8").match(/APP_VERSION\\s*=\\s*"([^"]+)"/);process.stdout.write(m?m[1]:"")')
+          VERSION=$(node -e 'const fs=require("fs");const m=fs.readFileSync("src/services/platform/version.js","utf8").match(/APP_VERSION\s*=\s*"([^"]+)"/);process.stdout.write(m?m[1]:"")')
           if [ -z "$VERSION" ]; then echo "::error::Could not read APP_VERSION from src/services/platform/version.js"; exit 1; fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Resolved APP_VERSION: $VERSION"
