@@ -44,3 +44,8 @@ nsis:
 # which the workflow sets to the repo it runs in.
 publish:
   provider: github
+  owner: Jaelisxynkz
+  repo: Sonora
+  # Stable channel only — desktop installs never auto-update to a pre-release.
+  # vPrefixedTagName: false would break electron-updater's tag matching; keep
+  # the default v-prefixed tags (v1.3.1) the release pipeline already uses.
