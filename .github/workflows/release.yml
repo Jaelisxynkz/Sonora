@@ -22,12 +22,14 @@
 #
 # RELIABILITY GUARANTEES:
 #   • Windows + Android build in PARALLEL — one failing never blocks the other.
-#   • A release is only created when a build actually produced its artifact
-#     (no empty releases that break auto-update).
+#   • A release is created ONLY after BOTH builds succeed and produce their
+#     artifacts. A single `release` job collects everything and publishes one
+#     release — no partial releases (missing .exe or .apk) can ever be marked
+#     "latest", which was the root cause of auto-update failures.
 #   • A final `verify` job fails loudly if the release is missing any required
 #     asset (.exe, latest.yml, .apk).
 #   • The release is marked `make_latest: true` so electron-updater's
-#     /releases/latest lookup always finds the pre-release.
+#     /releases/latest lookup always finds it.
 #   • The Android signing key is stable across builds (secret → cache →
 #     one-time generate) so APKs install as updates.
 
@@ -121,18 +123,11 @@ jobs:
             release/*.exe
             release/*.blockmap
             release/latest.yml
-      - name: Publish to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          tag_name: v${{ env.VERSION }}
-          name: Sonora ${{ env.VERSION }} 
-          body_path: notes.md
-          prerelease: false
-          make_latest: true
-          files: |
-            release/*.exe
-            release/*.blockmap
-            release/latest.yml
+          name: release-notes
+          if-no-files-found: error
+          path: notes.md
 
   android:
     needs: prepare
@@ -176,18 +171,12 @@ jobs:
         run: |
           mkdir -p /tmp/sonora-android && cd /tmp/sonora-android
           npm init -y >/dev/null
-          npm install --no-audit --no-fund @capacitor/core@^6.2.0 @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0 @capacitor/assets@^3.0.5
+          npm install --no-audit --no-fund @capacitor/core@^6.2.0 @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0 @capacitor/app@^6.0.2 @capacitor/assets@^3.0.5
           cp $GITHUB_WORKSPACE/capacitor.config.json .
           mkdir -p dist assets
           cp $GITHUB_WORKSPACE/electron/offline.html dist/index.html
-          # capacitor-assets expects assets/icon.png (1024x1024) as the source.
-          # icon-only.png is our 1024 master — copy it under the expected name
-          # so the APK ships the Sonora icon, not the default Capacitor one.
           cp $GITHUB_WORKSPACE/assets/icon-only.png assets/icon.png
           npx cap add android
-          # Strip the Android WebView ("wv") marker from the user agent so
-          # Google OAuth doesn't reject the app as an embedded browser
-          # (disallowed_useragent). Same fix the Electron build applies.
           cat > android/app/src/main/java/com/sonora/app/MainActivity.java <<'JAVA'
           package com.sonora.app;
           import android.os.Bundle;
@@ -244,16 +233,50 @@ jobs:
           name: android-apk
           if-no-files-found: error
           path: out/*.apk
-      - name: Publish APK to GitHub Release
+
+  release:
+    needs: [prepare, windows, android]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: artifacts/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: artifacts/android
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: artifacts
+      - name: Verify all artifacts present before publishing
+        run: |
+          echo "Windows artifacts:"; ls -la artifacts/windows/ || true
+          echo "Android artifacts:"; ls -la artifacts/android/ || true
+          test -f artifacts/windows/latest.yml || { echo "::error::latest.yml missing"; exit 1; }
+          ls artifacts/windows/*.exe >/dev/null 2>&1 || { echo "::error::.exe missing"; exit 1; }
+          test -f artifacts/android/Sonora-$VERSION.apk || { echo "::error::.apk missing"; exit 1; }
+          test -f artifacts/notes.md || { echo "::error::notes.md missing"; exit 1; }
+          echo "All artifacts present — publishing release v$VERSION"
+      - name: Create GitHub release with all assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
+          name: Sonora ${{ env.VERSION }}
+          body_path: artifacts/notes.md
           prerelease: false
           make_latest: true
-          files: out/*.apk
+          files: |
+            artifacts/windows/*.exe
+            artifacts/windows/*.blockmap
+            artifacts/windows/latest.yml
+            artifacts/android/*.apk
 
   verify:
-    needs: [prepare, windows, android]
+    needs: [prepare, release]
     runs-on: ubuntu-latest
     if: ${{ always() && needs.prepare.result == 'success' }}
     env:
