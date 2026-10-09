@@ -1,31 +1,34 @@
 {
-  "version": "1.1.9",
-  "build": 10,
+  "version": "1.3.0",
+  "build": 12,
   "codename": "Aurora",
   "releaseDate": "2026-10-09",
   "minVersion": "1.0.0",
   "mandatory": false,
   "channel": "stable",
   "releaseNotes": [
-    "Desktop app now reports its real version — the About screen and update checks were stuck on '1.0.0' before, so the updater could never tell when a new build was actually installed",
-    "Auto-update checks no longer fire concurrently when you switch or refocus the window — quieter logs, no wasted work, updates land more reliably",
-    "Release pipeline is live again — the GitHub Actions workflow is restored, so pushing a version tag builds the Windows installer and Android APK and publishes them with auto-update metadata in one step",
-    "Boot splash can no longer hang — public-settings and auth checks are bounded by timeouts, so the app always reaches the music within seconds even on a slow connection",
-    "Every page load is bounded by a 15s safety timeout — a stuck backend never leaves a spinner spinning forever; it resolves to a retryable error state instead",
+    "Google, Microsoft, Facebook and Apple sign-in now reliably return you to the app on every platform — the sign-in token reaches Sonora instead of being consumed by the browser tab",
+    "Android sign-in handoff fixed — Chrome no longer silently blocks the return to the app; a one-tap 'Open Sonora' button is shown as a fallback",
+    "Desktop fullscreen support — press F11 or use the toggle in the top bar for true OS-level fullscreen",
+    "Offline download integrity — on startup, every downloaded track is verified against its stored audio; if the OS evicted a track's bytes under storage pressure, it's cleanly removed instead of falsely showing as available offline",
+    "Download resume no longer corrupts files — if a server ignores a resume request and sends the whole file, the download restarts cleanly instead of stitching a broken file together",
+    "Sign-in state survives Android suspending the app while the browser is open — the handoff no longer fails its security check",
+    "Auto-update reliability overhaul — a release is now published only after both the Windows installer and Android APK build successfully, so a failed build can never leave a partial release that breaks auto-update for the other platform",
+    "Desktop updater stays on the stable channel — it no longer picks up pre-release builds, so your installs only move to final, published releases",
+    "The 'Restart & install' button now uses the safe download-then-install path, so it never fails even if the background auto-download hasn't finished yet",
     "Music data keeps flowing even when Base44 integration credits are exhausted — all track, artist, and chart requests route through the independent Cloudflare Worker proxy, separate from the billing",
-    "Crash isolation at app, route, and section level — a single broken component never takes down the whole app, and a retry is always one click away",
-    "The in-app 'Update Now' button now downloads the update before installing — it no longer fails with 'No update filepath provided', and repeated taps no longer stack a wall of identical error toasts"
+    "Crash isolation at app, route, and section level — a single broken component never takes down the whole app, and a retry is always one click away"
   ],
   "platforms": {
     "web": {
       "available": true,
-      "version": "1.1.9",
+      "version": "1.3.0",
       "url": "https://sonora-hub.base44.app",
       "type": "pwa"
     },
     "electron": {
       "available": true,
-      "version": "1.1.9",
+      "version": "1.3.0",
       "architecture": "x64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "nsis",
@@ -34,7 +37,7 @@
     },
     "android": {
       "available": true,
-      "version": "1.1.9",
+      "version": "1.3.0",
       "architecture": "arm64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "apk",
@@ -43,7 +46,7 @@
     },
     "ios": {
       "available": false,
-      "version": "1.1.9",
+      "version": "1.3.0",
       "appStoreUrl": null,
       "type": "appstore",
       "channel": "stable"
