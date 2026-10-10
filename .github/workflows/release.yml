@@ -2,19 +2,53 @@
 # and publishes them to a single GitHub Release that electron-updater and the
 # Download Center both read.
 #
+# NOTE: The LIVE copy of this workflow lives at .github/workflows/release.yml
+# (GitHub Actions only reads files under .github/workflows/). This copy is the
+# SOURCE OF TRUTH — copy it to .github/workflows/release.yml after editing.
+#
 # SINGLE SOURCE OF TRUTH: src/services/platform/version.js (APP_VERSION).
 #   1. Bump APP_VERSION in src/services/platform/version.js
 #   2. Edit releaseNotes in sonora-release.json
 #   3. Commit, then EITHER push a `v<version>` tag OR run this workflow manually
-#      (GitHub -> Actions -> "Release Sonora apps" -> Run workflow)
-#   -> The workflow syncs package.json + sonora-release.json to APP_VERSION,
-#      builds both artifacts in parallel, and publishes release v<version> with:
-#        - Sonora-Setup-<version>.exe  + latest.yml   (electron-updater)
-#        - Sonora-<version>.apk                      (Android)
-#   -> Existing desktop installs auto-update on next launch (electron-updater
-#      reads latest.yml from the release marked "latest").
-#   -> Existing Android installs update by installing the new APK (same signing
-#      key -> Android treats it as an update, not a fresh install).
+#      (GitHub → Actions → "Release Sonora apps" → Run workflow)
+#   → The workflow syncs package.json + sonora-release.json to APP_VERSION,
+#     builds both artifacts in parallel, and publishes release v<version> with:
+#       • Sonora-Setup-<version>.exe  + latest.yml   (electron-updater)
+#       • Sonora-<version>.apk                      (Android)
+#   → Existing desktop installs auto-update on next launch (electron-updater
+#     reads latest.yml from the release marked "latest").
+#   → Existing Android installs update by installing the new APK (same signing
+#     key → Android treats it as an update, not a fresh install).
+#
+# RELIABILITY GUARANTEES:
+#   • Windows + Android build in PARALLEL — one failing never blocks the other.
+#   • A release is created ONLY after BOTH builds succeed and produce their
+#     artifacts. A single `release` job collects everything and publishes one
+#     release — no partial releases (missing .exe or .apk) can ever be marked
+#     "latest", which was the root cause of auto-update failures.
+#   • A final `verify` job fails loudly if the release is missing any required
+#     asset (.exe, latest.yml, .apk).
+#   • The release is marked `make_latest: true` so electron-updater's
+#     /releases/latest lookup always finds it.
+#   • The Android signing key is stable across builds (secret → cache →
+#     one-time generate) so APKs install as updates.
+#
+# ANDROID NATIVE PLUGINS:
+#   The APK installs the full Capacitor plugin suite so the web core's
+#   window.Capacitor.Plugins.* references actually resolve inside the WebView:
+#     • App          — hardware back button, lifecycle, native version (updates)
+#     • Browser      — external URLs open in the system browser (auth handoff)
+#     • Share        — native share sheet
+#     • Haptics      — tactile feedback on touch
+#     • StatusBar    — dark, immersive status bar
+#     • SplashScreen — branded splash, hidden the moment React mounts
+#     • LocalNotifications — local notification scheduling
+#     • BackgroundMode (community) — foreground service so audio survives
+#       screen-off / backgrounding. Without it, Android pauses the WebView
+#       audio the moment the user switches apps or turns the screen off.
+#   The AndroidManifest.xml is patched with the FOREGROUND_SERVICE,
+#   FOREGROUND_SERVICE_MEDIA_PLAYBACK, POST_NOTIFICATIONS and WAKE_LOCK
+#   permissions so the foreground service is legal on Android 13/14+.
 
 name: Release Sonora apps
 
@@ -43,7 +77,7 @@ jobs:
       - name: "Resolve version (single source of truth: version.js)"
         id: ver
         run: |
-          VERSION=$(node -e 'const fs=require("fs");const m=fs.readFileSync("src/services/platform/version.js","utf8").match(/APP_VERSION\s*=\s*"([^"]+)"/);process.stdout.write(m?m[1]:"")')
+          VERSION=$(node -e "const fs=require('fs');const m=fs.readFileSync('src/services/platform/version.js','utf8').match(/APP_VERSION\s*=\s*\"([^\"]+)\"/);console.log(m?m[1]:'')")
           if [ -z "$VERSION" ]; then echo "::error::Could not read APP_VERSION from src/services/platform/version.js"; exit 1; fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Resolved APP_VERSION: $VERSION"
@@ -51,7 +85,7 @@ jobs:
             TAG="${GITHUB_REF#refs/tags/}"
             TAG="${TAG#v}"
             if [ "$TAG" != "$VERSION" ]; then
-              echo "::error::Pushed tag v$TAG does not match APP_VERSION $VERSION. Bump version.js to $TAG, commit, then tag."
+              echo "::error::Pushed tag v$TAG does not match APP_VERSION $VERSION in src/services/platform/version.js. Bump version.js to $TAG, commit, then tag."
               exit 1
             fi
           fi
@@ -105,18 +139,11 @@ jobs:
             release/*.exe
             release/*.blockmap
             release/latest.yml
-      - name: Publish to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          tag_name: v${{ env.VERSION }}
-          name: Sonora ${{ env.VERSION }}
-          body_path: notes.md
-          prerelease: false
-          make_latest: true
-          files: |
-            release/*.exe
-            release/*.blockmap
-            release/latest.yml
+          name: release-notes
+          if-no-files-found: error
+          path: notes.md
 
   android:
     needs: prepare
@@ -138,7 +165,7 @@ jobs:
         with:
           path: /tmp/sonora.keystore
           key: sonora-android-keystore-v1
-      - name: Prepare keystore (secret -> cache -> generate)
+      - name: Prepare keystore (secret → cache → generate)
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -151,7 +178,7 @@ jobs:
             echo "STORE_PASS=sonora-release" >> $GITHUB_ENV
             echo "Using cached keystore (stable across builds)."
           else
-            echo "::warning::No secret and no cache hit — generating a NEW keystore. Set ANDROID_KEYSTORE_BASE64 + ANDROID_KEYSTORE_PASSWORD secrets for permanent stable signing."
+            echo "::warning::No secret and no cache hit — generating a NEW keystore. Set ANDROID_KEYSTORE_BASE64 + ANDROID_KEYSTORE_PASSWORD secrets for permanent stable signing (download the keystore artifact from this run)."
             keytool -genkeypair -v -keystore /tmp/sonora.keystore -alias sonora -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass sonora-release -keypass sonora-release -dname "CN=Sonora, O=Sonora, C=EG"
             echo "STORE_PASS=sonora-release" >> $GITHUB_ENV
@@ -160,14 +187,65 @@ jobs:
         run: |
           mkdir -p /tmp/sonora-android && cd /tmp/sonora-android
           npm init -y >/dev/null
-          npm install --no-audit --no-fund @capacitor/core@^6.2.0 @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0 @capacitor/assets@^3.0.5 @capacitor/app@^6.0.2 @capacitor/browser@^6.0.4
+          # Official Capacitor plugins + community background-mode — the shared
+          # core calls window.Capacitor.Plugins.* for back button, app version
+          # (update check), external browser (auth handoff), share, haptics,
+          # status bar, splash screen, and background audio (foreground service
+          # that keeps music playing with the screen off). Without these
+          # installed + synced, every Plugins.X reference is undefined in the
+          # APK and the native integration silently fails.
+          npm install --no-audit --no-fund \
+            @capacitor/core@^6.2.0 @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0 \
+            @capacitor/app@^6 @capacitor/browser@^6 @capacitor/share@^6 \
+            @capacitor/haptics@^6 @capacitor/local-notifications@^6 \
+            @capacitor/status-bar@^6 @capacitor/splash-screen@^6 \
+            @capacitor-community/background-mode@^6.0.2 \
+            @capacitor/filesystem@^6 \
+            @capacitor/assets@^3.0.5
           cp $GITHUB_WORKSPACE/capacitor.config.json .
           mkdir -p dist assets
           cp $GITHUB_WORKSPACE/electron/offline.html dist/index.html
           cp $GITHUB_WORKSPACE/assets/icon-only.png assets/icon.png
           npx cap add android
-          sed -i '0,/<\/intent-filter>/s//<\/intent-filter>\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" \/>\n                <category android:name="android.intent.category.DEFAULT" \/>\n                <category android:name="android.intent.category.BROWSABLE" \/>\n                <data android:scheme="sonora" \/>\n            <\/intent-filter>/' android/app/src/main/AndroidManifest.xml
-          grep -q 'android:scheme="sonora"' android/app/src/main/AndroidManifest.xml || { echo "::error::sonora scheme not registered"; exit 1; }
+          cat > android/app/src/main/java/com/sonora/app/ApkInstallerPlugin.java <<'JAVA'
+          package com.sonora.app;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+          import android.content.Intent;
+          import android.net.Uri;
+          import androidx.core.content.FileProvider;
+          import java.io.File;
+          @CapacitorPlugin(name = "ApkInstaller")
+          public class ApkInstallerPlugin extends Plugin {
+            @PluginMethod
+            public void install(PluginCall call) {
+              String uriString = call.getString("uri");
+              if (uriString == null) { call.reject("uri required"); return; }
+              try {
+                Uri uri;
+                if (uriString.startsWith("content://")) {
+                  uri = Uri.parse(uriString);
+                } else {
+                  File file = uriString.startsWith("file://")
+                    ? new File(Uri.parse(uriString).getPath())
+                    : new File(uriString);
+                  if (!file.exists()) { call.reject("file not found"); return; }
+                  uri = FileProvider.getUriForFile(getContext(),
+                    getContext().getPackageName() + ".fileprovider", file);
+                }
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setDataAndType(uri, "application/vnd.android.package-archive");
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                getActivity().startActivity(intent);
+                call.resolve();
+              } catch (Exception e) {
+                call.reject("install failed: " + e.getMessage());
+              }
+            }
+          }
+          JAVA
           cat > android/app/src/main/java/com/sonora/app/MainActivity.java <<'JAVA'
           package com.sonora.app;
           import android.os.Bundle;
@@ -176,6 +254,7 @@ jobs:
           public class MainActivity extends BridgeActivity {
             @Override
             public void onCreate(Bundle savedInstanceState) {
+              registerPlugin(ApkInstallerPlugin.class);
               super.onCreate(savedInstanceState);
               try {
                 WebView webView = this.bridge.getWebView();
@@ -192,6 +271,45 @@ jobs:
             }
           }
           JAVA
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          # Add foreground-service + notification permissions for background
+          # audio. The @capacitor-community/background-mode plugin declares
+          # its own service, but Android 13+ requires POST_NOTIFICATIONS and
+          # Android 14+ requires FOREGROUND_SERVICE_MEDIA_PLAYBACK in the
+          # app's own manifest for the foreground service to start legally.
+          if ! grep -q 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' "$MANIFEST"; then
+            awk '
+              !done && /<application>/ {
+                print "    <uses-permission android:name=\"android.permission.FOREGROUND_SERVICE\" />"
+                print "    <uses-permission android:name=\"android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK\" />"
+                print "    <uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\" />"
+                print "    <uses-permission android:name=\"android.permission.WAKE_LOCK\" />"
+                print "    <uses-permission android:name=\"android.permission.REQUEST_INSTALL_PACKAGES\" />"
+                done=1
+              }
+              {print}
+            ' "$MANIFEST" > /tmp/manifest.xml && mv /tmp/manifest.xml "$MANIFEST"
+            echo "Added background-audio permissions to AndroidManifest.xml"
+          fi
+          # Register the sonora:// custom URL scheme so the OS opens Sonora for
+          # deep links (browser-auth handoff, share links). Capacitor does NOT
+          # auto-register custom schemes — without this intent filter,
+          # appUrlOpen events never fire on Android.
+          if ! grep -q 'android:scheme="sonora"' "$MANIFEST"; then
+            awk '
+              !done && /<\/activity>/ {
+                print "        <intent-filter>"
+                print "          <action android:name=\"android.intent.action.VIEW\" />"
+                print "          <category android:name=\"android.intent.category.DEFAULT\" />"
+                print "          <category android:name=\"android.intent.category.BROWSABLE\" />"
+                print "          <data android:scheme=\"sonora\" />"
+                print "        </intent-filter>"
+                done=1
+              }
+              {print}
+            ' "$MANIFEST" > /tmp/manifest.xml && mv /tmp/manifest.xml "$MANIFEST"
+            echo "Added sonora:// intent filter to AndroidManifest.xml"
+          fi
           npx capacitor-assets generate --android --iconBackgroundColor '#0a0a0f' --iconBackgroundColorDark '#0a0a0f' --splashBackgroundColor '#0a0a0f' --splashBackgroundColorDark '#0a0a0f' || echo "icon generation skipped"
           npx cap sync android
           CODE=$(echo $VERSION | awk -F. '{print $1*10000+$2*100+$3}')
@@ -224,16 +342,50 @@ jobs:
           name: android-apk
           if-no-files-found: error
           path: out/*.apk
-      - name: Publish APK to GitHub Release
+
+  release:
+    needs: [prepare, windows, android]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: artifacts/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: artifacts/android
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: artifacts
+      - name: Verify all artifacts present before publishing
+        run: |
+          echo "Windows artifacts:"; ls -la artifacts/windows/ || true
+          echo "Android artifacts:"; ls -la artifacts/android/ || true
+          test -f artifacts/windows/latest.yml || { echo "::error::latest.yml missing"; exit 1; }
+          ls artifacts/windows/*.exe >/dev/null 2>&1 || { echo "::error::.exe missing"; exit 1; }
+          test -f artifacts/android/Sonora-$VERSION.apk || { echo "::error::.apk missing"; exit 1; }
+          test -f artifacts/notes.md || { echo "::error::notes.md missing"; exit 1; }
+          echo "All artifacts present — publishing release v$VERSION"
+      - name: Create GitHub release with all assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
+          name: Sonora ${{ env.VERSION }}
+          body_path: artifacts/notes.md
           prerelease: false
           make_latest: true
-          files: out/*.apk
+          files: |
+            artifacts/windows/*.exe
+            artifacts/windows/*.blockmap
+            artifacts/windows/latest.yml
+            artifacts/android/*.apk
 
   verify:
-    needs: [prepare, windows, android]
+    needs: [prepare, release]
     runs-on: ubuntu-latest
     if: ${{ always() && needs.prepare.result == 'success' }}
     env:
@@ -254,4 +406,4 @@ jobs:
           echo "$ASSETS" | grep -q '\.exe$' || { echo "::error::Release missing .exe — desktop auto-update will fail"; exit 1; }
           echo "$ASSETS" | grep -q 'latest.yml' || { echo "::error::Release missing latest.yml — electron-updater will fail"; exit 1; }
           echo "$ASSETS" | grep -q '\.apk$' || { echo "::error::Release missing .apk — Android download will fail"; exit 1; }
-          echo "Release v$VERSION has all required assets (.exe, latest.yml, .apk). Auto-update will work."
+          echo "✓ Release v$VERSION has all required assets (.exe, latest.yml, .apk). Auto-update will work."
