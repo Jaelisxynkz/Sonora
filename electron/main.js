@@ -128,6 +128,21 @@ function createWindow() {
     return { action: "deny" };
   });
 
+  // F11 toggles true OS-level fullscreen. Electron doesn't handle F11 by
+  // default (unlike a regular browser), so without this the key does nothing
+  // in the desktop app. Intercept it before the renderer sees it.
+  mainWindow.webContents.on("before-input-event", (e, input) => {
+    if (input.type === "keyDown" && input.key === "F11") {
+      mainWindow.setFullScreen(!mainWindow.isFullScreen());
+      e.preventDefault();
+    }
+  });
+
+  // Notify the renderer when the fullscreen state changes (F11, OS controls,
+  // or the in-app toggle button) so the UI icon stays in sync.
+  mainWindow.on("enter-full-screen", () => mainWindow.webContents.send("sonora:fullscreen-change", true));
+  mainWindow.on("leave-full-screen", () => mainWindow.webContents.send("sonora:fullscreen-change", false));
+
   if (!isDev) Menu.setApplicationMenu(null);
 }
 
@@ -156,6 +171,16 @@ ipcMain.handle("sonora:install-update", async () => {
 ipcMain.on("sonora:open-external", (_e, url) => {
   if (typeof url === "string") shell.openExternal(url);
 });
+
+// Fullscreen toggle — called by the in-app top-bar button. F11 is handled
+// separately via before-input-event above; this is for the UI control.
+ipcMain.handle("sonora:toggle-fullscreen", () => {
+  if (!mainWindow) return false;
+  const fs = !mainWindow.isFullScreen();
+  mainWindow.setFullScreen(fs);
+  return fs;
+});
+ipcMain.handle("sonora:is-fullscreen", () => !!(mainWindow && mainWindow.isFullScreen()));
 ipcMain.handle("sonora:get-downloads-dir", () => {
   // Downloads live in userData/sonora-downloads — separated from app files,
   // preserved across updates and uninstall.
@@ -303,9 +328,10 @@ function setupAutoUpdater() {
   if (!app.isPackaged) return;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  // Allow pre-release versions to be picked up by the auto-updater so the
-  // latest pre-release channel installs on existing desktop builds.
-  autoUpdater.allowPrerelease = true;
+  // Stable channel only: the release pipeline publishes `prerelease: false`
+  // releases. Keeping this false ensures desktop installs never auto-update
+  // to a pre-release, which could be unstable.
+  autoUpdater.allowPrerelease = false;
 
   autoUpdater.on("update-available", (info) => {
     if (mainWindow) mainWindow.webContents.send("sonora:update-available", info);
@@ -320,8 +346,25 @@ function setupAutoUpdater() {
     updateDownloaded = true;
     if (mainWindow) mainWindow.webContents.send("sonora:update-ready");
   });
+  // Transient release-check failures (latest.yml 404, network blips, rate
+  // limits, ERR_NETWORK_ACCESS_DENIED) are not actionable for the user — the
+  // app retries hourly and auto-installs on quit once a real update is found.
+  // Don't surface these as a scary "Update failed" dialog; only report genuine
+  // update errors, and even then at most once per 10 minutes so a flaky
+  // network can't flood the screen with stacked toasts.
+  let lastErrorSentAt = 0;
   autoUpdater.on("error", (err) => {
     console.error("[Sonora] Auto-update error:", err);
+    const msg = (err?.message || "").toLowerCase();
+    const transient = msg.includes("latest.yml") || msg.includes("404") ||
+      msg.includes("network") || msg.includes("err_") || msg.includes("net::") ||
+      msg.includes("econnreset") || msg.includes("etimedout") || msg.includes("econnrefused") ||
+      msg.includes("getaddrinfo") || msg.includes("socket hang up") || msg.includes("rate limit") ||
+      msg.includes("access_denied") || msg.includes("internet disconnected");
+    if (transient) return;
+    const now = Date.now();
+    if (now - lastErrorSentAt < 10 * 60 * 1000) return;
+    lastErrorSentAt = now;
     if (mainWindow) mainWindow.webContents.send("sonora:update-error", err?.message || "Update error");
   });
 
@@ -351,8 +394,10 @@ function setupAutoUpdater() {
 app.userAgentFallback = app.userAgentFallback.replace(/\s(Electron|sonora|Sonora)\/\S+/g, "");
 
 app.whenReady().then(() => {
-  // Register the deep-link protocol (Windows).
-  if (process.platform === "win32") app.setAsDefaultProtocolClient(PROTOCOL);
+  // Register the sonora:// deep-link protocol on every platform so the
+  // browser-auth handoff always reopens Sonora. Windows + Linux use
+  // setAsDefaultProtocolClient; macOS handles it via the open-url event.
+  app.setAsDefaultProtocolClient(PROTOCOL);
 
   createWindow();
   setupAutoUpdater();

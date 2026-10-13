@@ -47,8 +47,14 @@
       "androidArtworkType": "bitmap",
       "iosArtworkType": "url"
     },
-    "BackgroundAudio": {
-      "enabled": true
+    "BackgroundMode": {
+      "title": "Sonora",
+      "text": "Playing in background",
+      "silent": true,
+      "color": "#0a0a0f",
+      "icon": "icon",
+      "channelName": "Sonora Playback",
+      "channelDescription": "Keeps Sonora playing in the background"
     },
     "Share": {
       "enabled": true

@@ -38,6 +38,11 @@ contextBridge.exposeInMainWorld("sonoraDesktop", {
   // Deep-link routing: the main process sends a path, the renderer routes it.
   onDeepLink: (cb) => ipcRenderer.on("sonora:deep-link", (_e, p) => cb(p)),
 
+  // OS-level fullscreen (F11 equivalent). The top-bar button calls these.
+  toggleFullscreen: () => ipcRenderer.invoke("sonora:toggle-fullscreen"),
+  isFullscreen: () => ipcRenderer.invoke("sonora:is-fullscreen"),
+  onFullscreenChange: (cb) => ipcRenderer.on("sonora:fullscreen-change", (_e, isFs) => cb(isFs)),
+
   // Discord Rich Presence — real IPC to the discord-rpc handler in the main
   // process. Selected automatically by adapters/index.js on the desktop build.
   discord: {

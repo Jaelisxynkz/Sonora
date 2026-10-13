@@ -1,28 +1,29 @@
 {
-  "version": "1.3.2",
-  "build": 14,
+  "version": "1.5.0",
+  "build": 18,
   "codename": "Aurora",
-  "releaseDate": "2026-10-09",
+  "releaseDate": "2026-10-13",
   "minVersion": "1.0.0",
   "mandatory": false,
   "channel": "stable",
   "releaseNotes": [
-    "Playback reliability — songs no longer skip when a cached track's signed stream URL has expired; Sonora now re-fetches fresh audio from SoundCloud and plays it instead of silently moving on",
-    "Frame-accurate real-time seek bar and lyrics — the timeline and word-by-word highlighting stay perfectly locked to the audio at 60fps",
-    "Auto-update hardening — the desktop updater now has an explicit GitHub release target baked in, so every install reliably finds and pulls the latest version on launch",
-    "Transient update-check errors (network blips, rate limits) stay silent instead of flooding the screen — real errors still surface, once",
-    "Desktop installs auto-update to the newest release the moment it's ready, deferring only while a song is playing so your music is never interrupted"
+    "Exact-version playback: when a song isn't playable in your region, Sonora now only plays the identical recording by the same artist — never a cover, DJ edit, remix or a different song",
+    "Alternate versions always stream in the highest available quality",
+    "Deeper search across SoundCloud and Audius to find a playable copy of more songs",
+    "New sleep timer in Audio Controls (5 to 90 minutes)",
+    "New keyboard shortcuts: Up/Down for volume, M to mute, S for shuffle, R for repeat",
+    "The 'another available version' notice now shows who uploaded the version you're hearing"
   ],
   "platforms": {
     "web": {
       "available": true,
-      "version": "1.3.2",
+      "version": "1.5.0",
       "url": "https://sonora-hub.base44.app",
       "type": "pwa"
     },
     "electron": {
       "available": true,
-      "version": "1.3.2",
+      "version": "1.5.0",
       "architecture": "x64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "nsis",
@@ -31,7 +32,7 @@
     },
     "android": {
       "available": true,
-      "version": "1.3.2",
+      "version": "1.5.0",
       "architecture": "arm64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "apk",
@@ -40,7 +41,7 @@
     },
     "ios": {
       "available": false,
-      "version": "1.3.2",
+      "version": "1.5.0",
       "appStoreUrl": null,
       "type": "appstore",
       "channel": "stable"

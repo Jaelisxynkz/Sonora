@@ -89,16 +89,35 @@ export function platformLabel() {
 
 // Open an external URL in the platform's native handler (system browser on
 // desktop, external browser on mobile). Falls back to window.open on web.
+// Open an external URL in the platform's native handler (system browser on
+// desktop, external browser on mobile). Falls back to window.open on web.
+// Returns true if a handler was found and invoked, false otherwise — the auth
+// flow uses this to fail immediately when no browser can be opened instead of
+// leaving the user on an infinite "Waiting…" spinner.
 export function openExternal(url) {
-  if (isDesktop && desktopBridge?.openExternal) {
-    desktopBridge.openExternal(url);
-    return;
+  try {
+    if (isDesktop && desktopBridge?.openExternal) {
+      desktopBridge.openExternal(url);
+      return true;
+    }
+    if (typeof window !== "undefined" && window.Capacitor?.Plugins?.Browser?.openUrl) {
+      window.Capacitor.Plugins.Browser.openUrl({ url });
+      return true;
+    }
+    // Older APKs without the Browser plugin: navigating the WebView to an
+    // external host makes Capacitor hand it to the system browser.
+    if (isMobile) {
+      window.location.href = url;
+      return true;
+    }
+    if (typeof window !== "undefined") {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
   }
-  if (typeof window !== "undefined" && window.Capacitor?.Plugins?.Browser?.openUrl) {
-    window.Capacitor.Plugins.Browser.openUrl({ url });
-    return;
-  }
-  if (typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
 }
 
 // Trigger a native update install if the platform supports it.
@@ -132,6 +151,28 @@ export async function showNotification(title, options = {}) {
       if (perm === "granted") new Notification(title, options);
     }
   }
+}
+
+// Native haptic feedback (mobile). No-op on web/desktop. Call from button
+// presses and key interactions to make the app feel tactile and native.
+//   style: "light" | "medium" | "heavy" | "selection" | "success" | "warning" | "error"
+export function haptic(style = "light") {
+  if (typeof window === "undefined") return;
+  const Haptics = window.Capacitor?.Plugins?.Haptics;
+  if (!Haptics) return;
+  try {
+    const map = {
+      light: "HAPTIC_FEEDBACK_TYPE_LIGHT",
+      medium: "HAPTIC_FEEDBACK_TYPE_MEDIUM",
+      heavy: "HAPTIC_FEEDBACK_TYPE_HEAVY",
+      selection: "HAPTIC_FEEDBACK_TYPE_SELECTION",
+    };
+    if (style === "success") { Haptics.notification({ type: "SUCCESS" }); return; }
+    if (style === "warning") { Haptics.notification({ type: "WARNING" }); return; }
+    if (style === "error") { Haptics.notification({ type: "ERROR" }); return; }
+    const t = map[style] || map.light;
+    Haptics.impact({ style: t });
+  } catch {}
 }
 
 // Native share sheet (mobile). No-op on desktop/web where the caller falls back.
@@ -173,6 +214,32 @@ export async function getDownloadsDirectory() {
     } catch { return null; }
   }
   return null;
+}
+
+// Toggle OS-level fullscreen. On desktop (Electron) this calls the native
+// BrowserWindow.setFullScreen; on web it falls back to the Fullscreen API.
+// Returns the new fullscreen state (true = entered, false = exited).
+export async function toggleFullscreen() {
+  if (isDesktop && desktopBridge?.toggleFullscreen) {
+    try { return await desktopBridge.toggleFullscreen(); } catch { return false; }
+  }
+  if (typeof document !== "undefined") {
+    if (document.fullscreenElement) {
+      try { await document.exitFullscreen(); } catch {}
+      return false;
+    }
+    try { await document.documentElement.requestFullscreen(); } catch {}
+    return true;
+  }
+  return false;
+}
+
+// Query the current fullscreen state.
+export async function isFullscreen() {
+  if (isDesktop && desktopBridge?.isFullscreen) {
+    try { return await desktopBridge.isFullscreen(); } catch { return false; }
+  }
+  return typeof document !== "undefined" && !!document.fullscreenElement;
 }
 
 // Backward-compatible aliases (older code may import these names).

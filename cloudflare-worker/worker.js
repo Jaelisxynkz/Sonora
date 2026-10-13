@@ -25,33 +25,28 @@
 //   4. Redeploy this worker
 // Every installed Sonora detects the update on next launch.
 const RELEASE = {
-  version: "1.3.0",
+  version: "1.4.0",
   codename: "Aurora",
-  releaseDate: "2026-10-09",
+  releaseDate: "2026-10-10",
   minVersion: "1.0.0",
   mandatory: false,
   channel: "stable",
   releaseNotes: [
-    "Google, Microsoft, Facebook and Apple sign-in now reliably return you to the app on every platform",
-    "Android sign-in handoff fixed — a one-tap 'Open Sonora' button is shown as a fallback",
-    "Desktop fullscreen support — press F11 or use the toggle in the top bar",
-    "Offline download integrity — evicted downloads are detected and cleaned up on startup",
-    "Download resume no longer corrupts files when a server ignores range requests",
-    "Sign-in state survives Android suspending the app while the browser is open",
-    "Auto-update reliability overhaul — releases publish only after both builds succeed",
-    "Music data keeps flowing even when Base44 integration credits are exhausted",
-    "Crash isolation at app, route, and section level — a retry is always one click away",
+    "Native Android app: full Capacitor plugin suite — hardware back button, status bar, splash screen, haptics, native share sheet, and external browser for Google sign-in",
+    "Background audio: music keeps playing with the screen off and when you switch apps, with a lock-screen notification showing the current track",
+    "APK auto-update: reads the real native version instead of defaulting to a false update-required prompt on every launch",
+    "Deep links: sonora:// links now open the app directly on Android (share links, auth handoff)",
   ],
   platforms: {
     web: {
       available: true,
-      version: "1.3.0",
+      version: "1.4.0",
       url: "https://sonora-hub.base44.app",
       type: "pwa",
     },
     electron: {
       available: true,
-      version: "1.3.0",
+      version: "1.4.0",
       architecture: "x64",
       url: "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       type: "nsis",
@@ -60,7 +55,7 @@ const RELEASE = {
     },
     android: {
       available: true,
-      version: "1.3.0",
+      version: "1.4.0",
       architecture: "arm64",
       url: "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       type: "apk",
@@ -69,7 +64,7 @@ const RELEASE = {
     },
     ios: {
       available: false,
-      version: "1.3.0",
+      version: "1.4.0",
       appStoreUrl: null,
       type: "appstore",
       channel: "stable",
@@ -233,8 +228,12 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // Health check — used by the client to test worker reachability
-    if (path === "/health") return json({ ok: true, ts: Date.now() });
+    // Health check — used by the client to test worker reachability and
+    // classify failure modes (blocked / timeout / network error). The
+    // `service` field lets the client validate it got a real Sonora worker
+    // response, not a captive-portal or ISP injection that returns 200 for
+    // everything.
+    if (path === "/health") return json({ ok: true, service: "sonora-proxy", ts: Date.now() });
 
     // Centralized release manifest — the single source of truth for every
     // installed Sonora (web, Windows, Android, iOS) to check for updates.
@@ -749,7 +748,12 @@ async function sharePage(kind, rawId, q, origin) {
     appPath: (fetched && fetched.appPath) || "/",
   };
 
-  const appUrl = `${SONORA_APP}${meta.appPath}`;
+  // Append ?play=1 so a human clicking the embed (Discord / X / WhatsApp) lands
+  // on the exact Sonora page AND the track/playlist starts playing — the
+  // Spotify-like "click the embed → it plays" experience. Discord can't render
+  // inline audio for third-party links, so the embed is a rich card that opens
+  // the app and plays; this flag is what triggers that auto-play in-app.
+  const appUrl = `${SONORA_APP}${meta.appPath}?play=1`;
   const title = meta.title;
   const description = meta.description;
   // Route artwork through our own proxy so Discord's crawler always receives it

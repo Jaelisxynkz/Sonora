@@ -1,12 +1,16 @@
-import React from "react";
-import { Info, RefreshCw, Download, CheckCircle2, AlertCircle, Sparkles, Globe } from "lucide-react";
+import React, { useState } from "react";
+import { Info, RefreshCw, Download, CheckCircle2, AlertCircle, Sparkles, Globe, GraduationCap } from "lucide-react";
 import { APP_VERSION, APP_BUILD, APP_CODENAME } from "@/services/platform/version";
 import { platformLabel, isWeb, isDesktop, isAndroid, isIOS } from "@/services/platform/platformAdapter";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
+import { useTutorial } from "@/state/TutorialContext";
 import { SettingSection, SettingRow, InfoCard, ActionButton } from "../primitives";
 
 export default function AboutCategory() {
   const { loading, result, check, applyUpdate, installing } = useUpdateCheck(true);
+  const { replay, resume, state, savedStep } = useTutorial();
+  const [confirmReplay, setConfirmReplay] = useState(false);
+  const canResume = state === "in_progress" && savedStep > 0;
 
   const updateAvailable = result?.ok && result.updateAvailable;
   const upToDate = result?.ok && !result.updateAvailable;
@@ -106,6 +110,22 @@ export default function AboutCategory() {
             <ActionButton onClick={check} tone="default">Retry</ActionButton>
           </SettingRow>
         )}
+      </SettingSection>
+
+      <SettingSection title="Sonora Guide" description="Your personal AI companion through Sonora">
+        <SettingRow icon={GraduationCap} title="Replay Full Guide" description="Go through the complete Sonora Guide experience again">
+          {confirmReplay ? (
+            <div className="flex items-center gap-2">
+              <ActionButton onClick={() => { replay(); setConfirmReplay(false); }} tone="accent">Yes, replay</ActionButton>
+              <ActionButton onClick={() => setConfirmReplay(false)} tone="default">Cancel</ActionButton>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              {canResume && <ActionButton onClick={resume} tone="accent">Resume</ActionButton>}
+              <ActionButton onClick={() => setConfirmReplay(true)} tone="default">Replay</ActionButton>
+            </div>
+          )}
+        </SettingRow>
       </SettingSection>
 
       <SettingSection title="Credits" description="The Sonora project">

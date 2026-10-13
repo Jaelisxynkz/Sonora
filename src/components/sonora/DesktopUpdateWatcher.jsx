@@ -10,13 +10,37 @@ import { CheckCircle2, Download, RefreshCw, X, Sparkles } from "lucide-react";
 //  - A rich "update available" card with the new version + feature highlights
 //    while downloading (with a live progress bar).
 //  - A "Restart & install" card when the download is complete.
-// The user clicks → quitAndInstall → the app restarts on the new version.
+//
+// AUTO-INSTALL: the moment the update is ready, Sonora automatically quits +
+// restarts into the new version — so every desktop install moves to the
+// latest release the instant it's opened, with no tap required. The only
+// guard is a playing song: if audio is active, the restart is deferred until
+// playback stops (or the user taps "Restart & install"), so a update never
+// cuts the user's music. A session guard prevents any restart loop.
+
+const AUTO_INSTALL_GRACE_MS = 2500; // let the app settle before restarting
+const IDLE_POLL_MS = 3000; // while audio plays, re-check this often
+const RESTART_KEY = "sonora:desktop:autoRestart";
+
+function isAudioPlaying() {
+  const a = document.querySelector("audio");
+  return !!(a && !a.paused && !a.ended && a.readyState >= 2);
+}
+
+function alreadyRestarted(version) {
+  try { return sessionStorage.getItem(`${RESTART_KEY}:${version}`) === "1"; } catch { return false; }
+}
+function markRestarted(version) {
+  try { sessionStorage.setItem(`${RESTART_KEY}:${version}`, "1"); } catch {}
+}
+
 export default function DesktopUpdateWatcher() {
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [ready, setReady] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
+  const idleTimer = useRef(null);
 
   useEffect(() => {
     if (!isDesktop || !desktopBridge) return;
@@ -39,23 +63,66 @@ export default function DesktopUpdateWatcher() {
       setReady(true);
     });
     desktopBridge.onUpToDate?.(() => setDownloading(false));
-    // Dedupe identical update errors so a rapid sequence of failures (e.g.
-    // multiple clicks on "Update Now") doesn't stack a wall of red toasts.
-    const lastErr = { msg: "", t: 0 };
+    // Cap update-error toasts to ONE per session — electron-updater can fire
+    // a different error message on every check (each carries a new request id
+    // + timestamp), so a per-message dedup isn't enough to stop a flood.
+    let errorShown = false;
     desktopBridge.onUpdateError?.((msg) => {
       setDownloading(false);
-      const now = Date.now();
-      if (msg === lastErr.msg && now - lastErr.t < 4000) return;
-      lastErr.msg = msg; lastErr.t = now;
-      toast({ title: "Update failed", description: msg, variant: "destructive" });
+      if (errorShown) return;
+      errorShown = true;
+      toast({ title: "Update check failed", description: "Couldn't reach the update server. Sonora will retry automatically.", variant: "destructive", duration: 6000 });
     });
+    return () => { if (idleTimer.current) clearInterval(idleTimer.current); };
   }, []);
+
+  // AUTO-INSTALL: when the update is ready, restart into it automatically —
+  // unless a song is playing, in which case defer until playback stops.
+  useEffect(() => {
+    if (!ready || dismissed) return;
+    const version = updateInfo?.version || "unknown";
+    if (alreadyRestarted(version)) return; // loop guard
+
+    const doInstall = () => {
+      if (alreadyRestarted(version)) return;
+      markRestarted(version);
+      toast({
+        title: "Restarting Sonora…",
+        description: `Installing version ${version}.`,
+        duration: 3000,
+      });
+      // Small grace period so the toast renders + the app settles before quit.
+      setTimeout(() => { try { desktopBridge?.installUpdate?.(); } catch {} }, 600);
+    };
+
+    if (!isAudioPlaying()) {
+      const t = setTimeout(doInstall, AUTO_INSTALL_GRACE_MS);
+      return () => clearTimeout(t);
+    }
+
+    // Audio is playing — defer until idle, keep the card visible with the
+    // manual button so the user can restart sooner if they want.
+    idleTimer.current = setInterval(() => {
+      if (!isAudioPlaying()) {
+        if (idleTimer.current) { clearInterval(idleTimer.current); idleTimer.current = null; }
+        doInstall();
+      }
+    }, IDLE_POLL_MS);
+    return () => { if (idleTimer.current) { clearInterval(idleTimer.current); idleTimer.current = null; } };
+  }, [ready, dismissed, updateInfo]);
 
   if (!isDesktop || dismissed) return null;
 
   const newVersion = updateInfo?.version;
-  // electron-updater passes releaseNotes as an array of strings when available
-  const highlights = (updateInfo?.releaseNotes || []).slice(0, 3);
+  // electron-updater delivers GitHub release notes as an HTML string (or an
+  // array of {note}) — normalize to plain lines so the card can't crash.
+  const rawNotes = updateInfo?.releaseNotes;
+  const highlights = (Array.isArray(rawNotes)
+    ? rawNotes.map((n) => (typeof n === "string" ? n : n?.note || ""))
+    : String(rawNotes || "").split(/<\/li>|\n/))
+    .map((s) => s.replace(/<[^>]*>/g, "").replace(/^[-*\s]+/, "").trim())
+    .filter(Boolean)
+    .slice(0, 3);
 
   // Downloading card with progress bar + feature highlights
   if (downloading && !ready) {
@@ -88,15 +155,16 @@ export default function DesktopUpdateWatcher() {
                 ))}
               </div>
             )}
-            <p className="text-xs text-muted-foreground mt-2">Installs automatically on restart.</p>
+            <p className="text-xs text-muted-foreground mt-2">Installs automatically when ready.</p>
           </div>
         </div>
       </div>
     );
   }
 
-  // Ready card
   if (!ready) return null;
+
+  const playing = isAudioPlaying();
 
   return (
     <div className="fixed bottom-5 right-5 z-[200] sonora-glass-strong rounded-2xl p-4 max-w-[340px] sonora-player-enter">
@@ -128,12 +196,17 @@ export default function DesktopUpdateWatcher() {
             </div>
           )}
           <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-            Restart to install the latest version with new features and improvements.
+            {playing
+              ? "Sonora will restart automatically when your song ends — or restart now to update immediately."
+              : "Sonora is restarting to install the update…"}
           </p>
           <Button
             size="sm"
             className="mt-3 w-full h-9"
-            onClick={() => desktopBridge?.quitAndInstall?.()}
+            onClick={() => {
+              const v = updateInfo?.version || "unknown";
+              if (!alreadyRestarted(v)) { markRestarted(v); try { desktopBridge?.installUpdate?.(); } catch {} }
+            }}
           >
             <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
             Restart &amp; install

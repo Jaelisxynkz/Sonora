@@ -2,22 +2,85 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0a0f" />
 <title>Sonora</title>
 <style>
-  html,body{height:100%;margin:0}
-  body{display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 45%,#1a1740 0%,#100e29 55%,#090817 100%);color:#f4f1ff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;text-align:center}
-  h1{font-weight:600;letter-spacing:.15em;margin:0 0 12px;background:linear-gradient(110deg,#c4b5fd,#9277ff 48%,#71e4ff);-webkit-background-clip:text;background-clip:text;color:transparent;font-size:44px}
-  p{color:#aaa6c2;margin:0 0 28px;font-size:14px}
-  button{background:#8b5cf6;color:#fff;border:0;border-radius:999px;padding:12px 28px;font-weight:600;font-size:14px;cursor:pointer}
-  button:hover{filter:brightness(1.1)}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden}
+  body{
+    display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 45%,#1a1740 0%,#100e29 55%,#090817 100%);
+    color:#f4f1ff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    text-align:center;padding:2rem;position:relative;overflow:hidden;
+  }
+  .aurora{position:absolute;border-radius:50%;filter:blur(70px);mix-blend-mode:screen;pointer-events:none}
+  .aurora-v{
+    width:340px;height:280px;left:calc(50% - 170px);top:calc(50% - 160px);
+    background:radial-gradient(circle,rgba(109,74,255,.35),transparent 70%);
+    animation:drift1 8s ease-in-out infinite;
+  }
+  .aurora-c{
+    width:320px;height:260px;left:calc(50% - 160px);top:calc(50% - 40px);
+    background:radial-gradient(circle,rgba(45,212,255,.22),transparent 70%);
+    animation:drift2 9s ease-in-out infinite;
+  }
+  @keyframes drift1{0%,100%{transform:translate(-12px,8px) scale(.9);opacity:.7}50%{transform:translate(14px,-10px) scale(1.08);opacity:1}}
+  @keyframes drift2{0%,100%{transform:translate(14px,-6px) scale(1);opacity:.75}50%{transform:translate(-12px,10px) scale(.9);opacity:1}}
+  .content{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:1.5rem;max-width:360px}
+  .mark{width:56px;height:56px;color:#a695ff;animation:glow 2.5s ease-in-out infinite}
+  @keyframes glow{0%,100%{filter:drop-shadow(0 0 18px rgba(109,74,255,.4))}50%{filter:drop-shadow(0 0 30px rgba(109,74,255,.65))}}
+  h1{font-weight:600;letter-spacing:.15em;font-size:36px;
+    background:linear-gradient(110deg,#c4b5fd,#9277ff 48%,#71e4ff);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  p{color:#aaa6c2;font-size:14px;line-height:1.5}
+  button{
+    background:#8b5cf6;color:#fff;border:0;border-radius:999px;
+    padding:12px 32px;font-weight:600;font-size:14px;cursor:pointer;
+    transition:filter .2s,transform .15s;
+  }
+  button:hover{filter:brightness(1.12)}
+  button:active{transform:scale(.96)}
+  .spinner{
+    width:20px;height:20px;border:2px solid rgba(255,255,255,.15);
+    border-top-color:#9277ff;border-radius:50%;animation:spin .8s linear infinite;
+    margin-top:4px;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .retrying{display:none;align-items:center;gap:10px;color:#aaa6c2;font-size:13px}
+  .retrying.show{display:flex}
+  .retry.hide{display:none}
 </style>
 </head>
 <body>
-  <div>
+  <div class="aurora aurora-v"></div>
+  <div class="aurora aurora-c"></div>
+  <div class="content">
+    <svg class="mark" viewBox="0 0 64 64" fill="none">
+      <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="2" opacity=".25"/>
+      <path d="M32 12 C20 12 14 22 14 32 C14 42 20 52 32 52" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>
+      <circle cx="32" cy="32" r="6" fill="currentColor"/>
+      <path d="M32 26 L32 14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+    </svg>
     <h1>SONORA</h1>
-    <p>You're offline. Connect to the internet to keep listening.</p>
-    <button onclick="location.href='https://sonora-hub.base44.app'">Try again</button>
+    <p id="msg">You're offline. Connect to the internet to keep listening.</p>
+    <button id="btn" class="retry" onclick="retry()">Try again</button>
+    <div id="retrying" class="retrying">
+      <div class="spinner"></div>
+      <span>Reconnecting…</span>
+    </div>
   </div>
+  <script>
+    function retry(){
+      document.getElementById('btn').classList.add('hide');
+      document.getElementById('retrying').classList.add('show');
+      document.getElementById('msg').textContent = 'Reconnecting to Sonora…';
+      location.href = 'https://sonora-hub.base44.app';
+    }
+    // Auto-retry when the connection comes back (the WebView regains network).
+    window.addEventListener('online', function(){ retry(); });
+    // Also retry after 5 seconds in case the 'online' event doesn't fire.
+    setTimeout(function(){ if(navigator.onLine) retry(); }, 5000);
+  </script>
 </body>
 </html>
