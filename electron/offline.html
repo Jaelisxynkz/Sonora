@@ -71,16 +71,26 @@
     </div>
   </div>
   <script>
+    var APP_URL = 'https://realsonora.base44.app';
+    var retrying = false;
     function retry(){
+      if (retrying) return;
+      retrying = true;
       document.getElementById('btn').classList.add('hide');
       document.getElementById('retrying').classList.add('show');
       document.getElementById('msg').textContent = 'Reconnecting to Sonora…';
-      location.href = 'https://sonora-hub.base44.app';
+      // Cache-bust so a stale service worker can't serve a bad page on retry.
+      var sep = APP_URL.indexOf('?') === -1 ? '?' : '&';
+      location.replace(APP_URL + sep + '_r=' + Date.now());
     }
-    // Auto-retry when the connection comes back (the WebView regains network).
+    // Auto-retry when the WebView regains network.
     window.addEventListener('online', function(){ retry(); });
-    // Also retry after 5 seconds in case the 'online' event doesn't fire.
-    setTimeout(function(){ if(navigator.onLine) retry(); }, 5000);
+    // Retry continuously — the load itself is the connectivity test, so we
+    // don't gate on navigator.onLine (it can be stale in Electron and block
+    // recovery). Every 4s until the app comes back.
+    setInterval(function(){ retrying = false; retry(); }, 4000);
+    // First attempt almost immediately.
+    setTimeout(retry, 1500);
   </script>
 </body>
 </html>

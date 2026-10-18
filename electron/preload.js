@@ -52,5 +52,8 @@ contextBridge.exposeInMainWorld("sonoraDesktop", {
     disconnect: () => ipcRenderer.invoke("sonora:discord:disconnect"),
     status: () => ipcRenderer.invoke("sonora:discord:status"),
     reset: (clientId) => ipcRenderer.invoke("sonora:discord:reset", clientId),
+    // Fires when Discord's IPC pipe drops (Discord closed/crashed). Lets the
+    // adapter notify the manager to reconnect instantly.
+    onDisconnected: (cb) => ipcRenderer.on("sonora:discord:disconnected", () => cb()),
   },
 });

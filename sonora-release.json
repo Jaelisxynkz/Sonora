@@ -1,29 +1,29 @@
 {
-  "version": "1.5.0",
-  "build": 18,
+  "version": "1.5.2",
+  "build": 20,
   "codename": "Aurora",
-  "releaseDate": "2026-10-13",
+  "releaseDate": "2026-10-18",
   "minVersion": "1.0.0",
   "mandatory": false,
   "channel": "stable",
   "releaseNotes": [
+    "Critical fix: Electron no longer shows a false 'You're offline' screen on cold start — transient load failures now retry with backoff, and the offline screen continuously auto-reconnects",
     "Exact-version playback: when a song isn't playable in your region, Sonora now only plays the identical recording by the same artist — never a cover, DJ edit, remix or a different song",
     "Alternate versions always stream in the highest available quality",
     "Deeper search across SoundCloud and Audius to find a playable copy of more songs",
     "New sleep timer in Audio Controls (5 to 90 minutes)",
-    "New keyboard shortcuts: Up/Down for volume, M to mute, S for shuffle, R for repeat",
-    "The 'another available version' notice now shows who uploaded the version you're hearing"
+    "New keyboard shortcuts: Up/Down for volume, M to mute, S for shuffle, R for repeat"
   ],
   "platforms": {
     "web": {
       "available": true,
-      "version": "1.5.0",
-      "url": "https://sonora-hub.base44.app",
+      "version": "1.5.2",
+      "url": "https://realsonora.base44.app",
       "type": "pwa"
     },
     "electron": {
       "available": true,
-      "version": "1.5.0",
+      "version": "1.5.2",
       "architecture": "x64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "nsis",
@@ -32,7 +32,7 @@
     },
     "android": {
       "available": true,
-      "version": "1.5.0",
+      "version": "1.5.2",
       "architecture": "arm64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "apk",
@@ -41,7 +41,7 @@
     },
     "ios": {
       "available": false,
-      "version": "1.5.0",
+      "version": "1.5.2",
       "appStoreUrl": null,
       "type": "appstore",
       "channel": "stable"

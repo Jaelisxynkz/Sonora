@@ -22,7 +22,7 @@ const fs = require("fs");
 const { autoUpdater } = require("electron-updater");
 
 // The live Sonora app — same accounts, backend and library as the web.
-const APP_URL = "https://sonora-hub.base44.app";
+const APP_URL = "https://realsonora.base44.app";
 
 let mainWindow = null;
 // Tracks whether electron-updater has finished downloading an update, so the
@@ -109,16 +109,53 @@ function createWindow() {
     mainWindow.loadURL("http://localhost:5173");
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
+    // Retry-with-backoff before showing the offline screen. A cold-start DNS
+    // race or a transient CDN 5xx should never strand the user on "no
+    // internet" when the connection is fine a second later. We retry the app
+    // URL a few times with exponential backoff; only after all retries fail do
+    // we fall back to the branded offline screen (which itself auto-retries).
+    const OFFLINE_FILE = path.join(__dirname, "offline.html");
+    const MAX_RETRIES = 4;
+    let loadRetries = 0;
+    let showingOffline = false;
+
+    const showOffline = () => {
+      if (showingOffline) return;
+      showingOffline = true;
+      loadRetries = 0; // fresh budget for the offline screen's own retry
+      mainWindow.loadFile(OFFLINE_FILE);
+    };
+    const tryLoadApp = () => {
+      showingOffline = false;
+      mainWindow.loadURL(APP_URL);
+    };
+    const retryOrFail = () => {
+      if (loadRetries < MAX_RETRIES) {
+        loadRetries++;
+        const delay = Math.min(1000 * 2 ** (loadRetries - 1), 8000);
+        setTimeout(tryLoadApp, delay);
+      } else {
+        showOffline();
+      }
+    };
+
     mainWindow.loadURL(APP_URL);
-    const showOffline = () => mainWindow.loadFile(path.join(__dirname, "offline.html"));
-    // No connection → branded offline screen with a retry button.
+    // -3 = ERR_ABORTED (the nuclear-purge location.replace aborts the first
+    // load) — not a real failure, ignore it. Everything else on the main
+    // frame goes through the retry sequence.
     mainWindow.webContents.on("did-fail-load", (_e, code, _desc, _url, isMainFrame) => {
-      if (isMainFrame && code !== -3) showOffline();
+      if (isMainFrame && code !== -3) retryOrFail();
     });
-    // Server error on the app itself (e.g. 404/5xx) → same retry screen
+    // Server error on the app itself (e.g. 5xx) → retry, then offline screen
     // instead of a raw JSON error page.
     mainWindow.webContents.on("did-navigate", (_e, url, httpCode) => {
-      if (httpCode >= 400 && url.startsWith(APP_URL)) showOffline();
+      if (url.startsWith(APP_URL) && httpCode >= 400) retryOrFail();
+      else if (url.startsWith(APP_URL) && httpCode >= 200 && httpCode < 400) loadRetries = 0;
+    });
+    // A completed main-frame load means we're online — reset the budget so a
+    // future transient blip can retry again.
+    mainWindow.webContents.on("did-finish-load", () => {
+      if (mainWindow.webContents.getURL().startsWith(APP_URL)) loadRetries = 0;
     });
   }
 
@@ -233,6 +270,10 @@ async function discordInit(clientId) {
     discordClient.on("disconnected", () => {
       discordReady = false;
       discordClient = null;
+      // Notify the renderer the instant Discord's IPC pipe drops, so the
+      // Discord status light flips to "Reconnecting…" immediately (instead of
+      // waiting up to 15s for the heartbeat) and the manager auto-reconnects.
+      try { mainWindow?.webContents?.send("sonora:discord:disconnected"); } catch {}
     });
     // Never hang forever on a dead pipe — fail after 10s so the renderer retries.
     await Promise.race([
@@ -393,11 +434,24 @@ function setupAutoUpdater() {
 // "embedded browser".
 app.userAgentFallback = app.userAgentFallback.replace(/\s(Electron|sonora|Sonora)\/\S+/g, "");
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Register the sonora:// deep-link protocol on every platform so the
   // browser-auth handoff always reopens Sonora. Windows + Linux use
   // setAsDefaultProtocolClient; macOS handles it via the open-url event.
   app.setAsDefaultProtocolClient(PROTOCOL);
+
+  // Clear stale HTTP cache + service workers so the desktop app always
+  // loads the latest published build. Preserves localStorage/IndexedDB
+  // (user library, downloads, settings) — only clears network caches.
+  // This fixes the "black screen" issue where a stale SW served old
+  // cached assets that didn't match the latest published HTML.
+  try {
+    await session.defaultSession.clearCache();
+    await session.defaultSession.clearCodeCache();
+    await session.defaultSession.clearStorageData({
+      storages: ["serviceworkers", "cachestorage"],
+    });
+  } catch {}
 
   createWindow();
   setupAutoUpdater();
