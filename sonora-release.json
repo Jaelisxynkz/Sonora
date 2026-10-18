@@ -1,12 +1,14 @@
 {
-  "version": "1.5.2",
-  "build": 20,
+  "version": "1.5.3",
+  "build": 21,
   "codename": "Aurora",
   "releaseDate": "2026-10-18",
   "minVersion": "1.0.0",
   "mandatory": false,
   "channel": "stable",
   "releaseNotes": [
+    "APK fix: rebuilt with the correct app domain (realsonora.base44.app) — resolves the 'App not found' error on Android",
+    "APK fix: in-app APK installer now correctly registers FileProvider so updates install without a browser redirect",
     "Critical fix: Electron no longer shows a false 'You're offline' screen on cold start — transient load failures now retry with backoff, and the offline screen continuously auto-reconnects",
     "Exact-version playback: when a song isn't playable in your region, Sonora now only plays the identical recording by the same artist — never a cover, DJ edit, remix or a different song",
     "Alternate versions always stream in the highest available quality",
@@ -17,13 +19,13 @@
   "platforms": {
     "web": {
       "available": true,
-      "version": "1.5.2",
+      "version": "1.5.3",
       "url": "https://realsonora.base44.app",
       "type": "pwa"
     },
     "electron": {
       "available": true,
-      "version": "1.5.2",
+      "version": "1.5.3",
       "architecture": "x64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "nsis",
@@ -32,7 +34,7 @@
     },
     "android": {
       "available": true,
-      "version": "1.5.2",
+      "version": "1.5.3",
       "architecture": "arm64",
       "url": "https://github.com/Jaelisxynkz/Sonora/releases/latest",
       "type": "apk",
@@ -41,7 +43,7 @@
     },
     "ios": {
       "available": false,
-      "version": "1.5.2",
+      "version": "1.5.3",
       "appStoreUrl": null,
       "type": "appstore",
       "channel": "stable"
